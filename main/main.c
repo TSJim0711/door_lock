@@ -5,6 +5,8 @@
 #include "freertos/portmacro.h"
 #include "driver/gpio.h"
 
+#include "oled.h"
+
 #define GPIO_BTN    GPIO_NUM_4
 #define GPIO_LED_RED   GPIO_NUM_5
 #define GPIO_LED_GREEN GPIO_NUM_6
@@ -89,7 +91,12 @@ void app_main(void) {
     gpio_install_isr_service(0);
     gpio_isr_handler_add(GPIO_BTN, btn_gpio_isr_handler, NULL);
 
+    //init i2c & oled
+    i2c_master_init();
+    OLED_Init();
+    OLED_DrawTetragon(10,10,60,20,1,0);
+
     //create doorlock service
-    xTaskCreate(tsk_doorLock, "tsk_doorLock", 4096, NULL, 10, NULL);
+    xTaskCreate(door_lock_task, "tsk_doorLock", 4096, NULL, 10, NULL);
     vTaskDelete(NULL);
 }
