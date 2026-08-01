@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -32,6 +33,11 @@ void door_lock_task(void *pvParameters) {
     gpio_set_level(GPIO_LED_GREEN, 0);
     gpio_set_level(GPIO_LED_RED, 1);
 
+    char print_buff[64];
+    OLED_ShowStr(10,5,"门已锁!",24,1,0);
+    OLED_ShowStr(10,30,"Locked",24,1,0);
+    OLED_ShowChar(100,30,Eng,"L",24,1,0);
+
     while (1) {
         //if in countdown then wait 50ms, else wait till die
         TickType_t xTicksToWait = (relock_countdown > 0) ? pdMS_TO_TICKS(50) : portMAX_DELAY;
@@ -42,13 +48,24 @@ void door_lock_task(void *pvParameters) {
             printf("Unlocked.\n");
             gpio_set_level(GPIO_LED_GREEN, 1);
             gpio_set_level(GPIO_LED_RED, 0);
+            OLED_ShowStr(10,5,"门已开锁",24,1,0);
+            OLED_ShowStr(10,30,"Door unlocked,",16,1,0);
             relock_countdown = 200; // 200 * 50ms = 10s countdown
         }
 
         //countdown
         relock_countdown--;
         if(relock_countdown%20==0)//20*50ms =1s, print countdown per sec
-        printf("%ds left...\n", relock_countdown/20);
+        {
+            OLED_Clear();
+            printf("%ds left...\n", relock_countdown/20);
+
+            sprintf(print_buff,"还剩%d时",relock_countdown/20);
+            OLED_ShowStr(10,5,print_buff,24,1,0);
+            OLED_ShowStr(10,30,"Door unlocked,",16,1,0);
+            sprintf(print_buff,"%d sec left.",relock_countdown/20);
+            OLED_ShowStr(10,46,print_buff,16,1,0);
+        }
 
         //time running, green led flash
         if (relock_countdown <= 80 && relock_countdown > 0) {
@@ -64,6 +81,9 @@ void door_lock_task(void *pvParameters) {
             printf("Locked!\n");
             gpio_set_level(GPIO_LED_GREEN, 0);
             gpio_set_level(GPIO_LED_RED, 1);
+            OLED_Clear();
+            OLED_ShowStr(10,5,"门已上锁",24,1,0);
+            OLED_ShowStr(10,30,"Door Locked",16,1,0);
         }
     }
 }
@@ -94,7 +114,6 @@ void app_main(void) {
     //init i2c & oled
     i2c_master_init();
     OLED_Init();
-    OLED_DrawTetragon(10,10,60,20,1,0);
 
     //create doorlock service
     xTaskCreate(door_lock_task, "tsk_doorLock", 4096, NULL, 10, NULL);

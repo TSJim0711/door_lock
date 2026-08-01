@@ -1,18 +1,20 @@
 #include "driver/i2c_master.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "esp_log.h"
 #include "string.h"
 #include "uni_font.h"
 
 #define I2C_GPIO_SCL                GPIO_NUM_1      //SCL clock
 #define I2C_GPIO_SDA                GPIO_NUM_2      //SDA
 #define I2C_MASTER_NUM              I2C_NUM_0
-#define I2C_MASTER_FREQ_HZ          12500
+#define I2C_MASTER_FREQ_HZ          1000000
 #define OLED_I2C_ADDRESS            0x3C             //oled addr
-
 
 #define OLED_CMD  0x00
 #define OLED_DATA 0x40
+
+#define ROUND_UP()
 
 uint8_t g_oled_buff[144][8];
 static i2c_master_dev_handle_t s_oled_dev_handle = NULL;
@@ -94,13 +96,11 @@ void OLED_DrawPoint(uint8_t x,uint8_t y,uint8_t mode, uint8_t is_wrapped)
 	i=y/8;
 	m=y%8;
 	n=1<<m;
-	if(mode){g_oled_buff[x][i]|=n;}
-	else
-	{
-		g_oled_buff[x][i]=~g_oled_buff[x][i];
-		g_oled_buff[x][i]|=n;
-		g_oled_buff[x][i]=~g_oled_buff[x][i];
-	}
+if (mode) {
+        g_oled_buff[x][i] |= n;//bit set to 1
+    } else {
+        g_oled_buff[x][i] &= ~n;//clear bit
+    }
 
 	if(!is_wrapped)
 		OLED_Refresh();
@@ -157,15 +157,102 @@ void OLED_DrawTetragon(uint8_t x1,uint8_t y1,uint8_t x2,uint8_t y2,uint8_t mode,
 	uint8_t memset_fromy=y1+(8-y1%8)%8, memset_toy=y2-y2%8;
 	for(int x=x1;x<=x2;x++)
 	{
-		for(int y=y1;y<memset_fromy;y++)//draw pt till next full byte
+		if(memset_toy>memset_fromy)
+		{
+			for(int y=y1;y<memset_fromy;y++)//draw pt till next full byte
+				OLED_DrawPoint(x,y,mode,1);
+			memset(g_oled_buff[x]+(int)(memset_fromy/8),(mode?0xFF:0x00),(int)((memset_toy-memset_fromy)/8));
+			for(int y=memset_toy;y<=y2;y++)//draw pt till end
 			OLED_DrawPoint(x,y,mode,1);
-		
-		memset(g_oled_buff[x]+(int)(memset_fromy/8),(mode?0xFF:0x00),(int)((memset_toy-memset_fromy)/8));
-		
-		for(int y=memset_toy;y<=y2;y++)//draw pt till next full byte
-			OLED_DrawPoint(x,y,mode,1);
+		}else
+		{
+			for(int y=y1;y<=y2;y++)//draw pt till next full byte
+				OLED_DrawPoint(x,y,mode,1);
+		}
 	}
 
+	if(!is_wrapped)
+		OLED_Refresh();
+}
+
+//在指定位置显示一个字符,包括部分字符
+//x:0~127
+//y:0~63
+//size1:选择字体 16/24/48
+//mode:0,反色显示;1,正常显示
+void OLED_ShowChar(uint8_t x,uint8_t y,enum language lang, char* chr,uint8_t size,uint8_t mode, uint8_t is_wrapped)
+{
+	uint8_t byte, cur_byte_cont, bit, width, msk_size, msk_drop_bit=0;
+	uint8_t x0=x,y0=y,x_shift=0,y_shift=0;
+	unsigned char const *msk=get_char_msk(lang,size,chr);
+	if(msk==NULL)
+		return;
+	
+	width=size/(lang==Eng?2:1);//eng have half width
+	msk_size=width*size/8;
+	for(byte=0;byte<msk_size+(msk_drop_bit/8);byte++)
+	{
+		cur_byte_cont=*(msk+byte);
+		for(bit=0;bit<8;bit++)
+		{
+			if(cur_byte_cont&0x01)//if cur bit need to draw or blank, then do so
+				OLED_DrawPoint(x+x_shift,y+y_shift,mode,1);
+			else
+				OLED_DrawPoint(x+x_shift,y+y_shift,!mode,1);
+			cur_byte_cont>>=1;//shift right, see next bit
+			
+			x_shift++;//next pixel to draw
+			if(x_shift>=width)//width reach font size, drop cur byte
+			{
+				msk_drop_bit+=8-bit;//record droped bit in byte, for further msk_size reference
+				break;
+			}
+		}
+		if(x_shift>=width)//width reach font size, reset width, col+1
+		{
+			x_shift=0;
+			y_shift++;
+			if(y_shift>=size)//patch: msk_drop_bit may +1 even when last col, an underline may print, which not preffer
+				break;
+		}
+  }
+  if(!is_wrapped)
+	OLED_Refresh();
+}
+
+//在指定位置显示一个字符串
+//x:0~127
+//y:0~63
+//size:选择字体 16/24/48
+//mode:0,反色显示;1,正常显示
+void OLED_ShowStr(uint8_t x,uint8_t y, char* str,uint8_t size, uint8_t mode, uint8_t is_wrapped)
+{
+	char* str_ptr=str;
+	uint8_t x_shift=0;
+	enum language cur_lang=-1;
+	while(*str_ptr!='\0' && x+x_shift+size<=127)//print untill reach str end or screen edge 
+	{
+		ESP_LOGI("OLED", "x:%d, y:%d, str left:%s", x+x_shift,y, str_ptr);
+		char chr[5]={'\0','\0','\0','\0','\0'};//char end anywhere
+		if(*str_ptr<0x80)//merge char into str
+		{
+			chr[0]=*str_ptr++;
+			cur_lang=Eng;
+		}
+		else if(0xC0<=*str_ptr && *str_ptr<0xD0)
+		{
+			chr[0]=*str_ptr++;
+			chr[1]=*str_ptr++;
+		}else if(0xE0<=*str_ptr && *str_ptr<0xF0)
+		{
+			chr[0]=*str_ptr++;
+			chr[1]=*str_ptr++;
+			chr[2]=*str_ptr++;
+			cur_lang=Hans;
+		}
+		OLED_ShowChar(x+x_shift, y, cur_lang, chr, size, mode, 1);
+		x_shift+=size/(cur_lang==Eng?2:1);//shift x, eng width = half size
+	}
 	if(!is_wrapped)
 		OLED_Refresh();
 }
