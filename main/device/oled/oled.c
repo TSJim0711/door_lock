@@ -8,7 +8,7 @@
 #define I2C_GPIO_SCL                GPIO_NUM_1      //SCL clock
 #define I2C_GPIO_SDA                GPIO_NUM_2      //SDA
 #define I2C_MASTER_NUM              I2C_NUM_0
-#define I2C_MASTER_FREQ_HZ          1000000
+#define I2C_MASTER_FREQ_HZ          1250000
 #define OLED_I2C_ADDRESS            0x3C             //oled addr
 
 #define OLED_CMD  0x00
@@ -44,7 +44,7 @@ void i2c_master_init(void) {
     //reg oled to bus, send/get through handler
     ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &dev_config, &s_oled_dev_handle));
     
-    printf("i2c inited\n");
+    printf("i2c inited.\n");
 }
 
 void OLED_WR_Byte(uint8_t dat, uint8_t mode)
@@ -233,6 +233,7 @@ void OLED_ShowStr(uint8_t x,uint8_t y, char* str,uint8_t size, uint8_t mode, uin
 	while(*str_ptr!='\0' && x+x_shift+size<=127)//print untill reach str end or screen edge 
 	{
 		ESP_LOGI("OLED", "x:%d, y:%d, str left:%s", x+x_shift,y, str_ptr);
+
 		char chr[5]={'\0','\0','\0','\0','\0'};//char end anywhere
 		if(*str_ptr<0x80)//merge char into str
 		{

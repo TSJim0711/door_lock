@@ -1,0 +1,21 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "ESP-IDF: Build (WSL Native)",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-c",
+                "export IDF_TOOLS_PATH=/home/tsj/.espressif/tools && export IDF_PYTHON_ENV_PATH=/home/tsj/.espressif/tools/python/v6.0.2/venv && . /home/tsj/esp/esp-idf/export.sh && idf.py build"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ]
+        }
+    ]
+}
