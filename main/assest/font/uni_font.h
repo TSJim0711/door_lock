@@ -19,9 +19,9 @@ typedef struct mskkit16{
     char index[4];
 } mskkit16;
 
-extern const mskkit72 zh_font24[];
-extern const mskkit48 en_font24[];
-extern const mskkit16 en_font16[];
+extern const mskkit72 font24_zh[];
+extern const mskkit48 font24_en[];
+extern const mskkit16 font16_en[];
 
 
 unsigned char const * get_char_msk(enum language lang,uint8_t size,char* chr);

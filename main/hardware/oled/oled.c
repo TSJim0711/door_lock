@@ -47,13 +47,13 @@ void i2c_master_init(void) {
     printf("i2c inited.\n");
 }
 
-void OLED_WR_Byte(uint8_t dat, uint8_t mode)
+void oled_write_byte(uint8_t dat, uint8_t mode)
 {
     uint8_t write_buf[2] = {mode, dat};
     i2c_master_transmit(s_oled_dev_handle, write_buf, sizeof(write_buf), -1);//send write_buf through handler
 }
 
-void OLED_Refresh(void)
+void oled_screen_update(void)
 {
     uint8_t i;
     //send buff, 1 control byte+ 128 control byte
@@ -61,9 +61,9 @@ void OLED_Refresh(void)
     send_buf[0] = 0x40; //control byte
 
     for (i = 0; i < 8; i++) {
-        OLED_WR_Byte(0xB0 + i, OLED_CMD); //设置行起始地址
-        OLED_WR_Byte(0x02, OLED_CMD);     //设置低列起始地址
-        OLED_WR_Byte(0x10, OLED_CMD);     //设置高列起始地址
+        oled_write_byte(0xB0 + i, OLED_CMD); //设置行起始地址
+        oled_write_byte(0x02, OLED_CMD);     //设置低列起始地址
+        oled_write_byte(0x10, OLED_CMD);     //设置高列起始地址
 
         //load frame buf to send buf
         for (uint8_t n = 0; n < 128; n++) {
@@ -75,7 +75,7 @@ void OLED_Refresh(void)
     }
 }
 
-void OLED_Clear(void)
+void oled_screen_clear(void)
 {
     //set framebuff to full 0
     for(int i=0;i<128;i++)
@@ -83,14 +83,14 @@ void OLED_Clear(void)
 			g_oled_buff[i][j]=0;
     
     //refresh screen
-    OLED_Refresh();
+    oled_screen_update();
 }
 
 //画点 
 //x:0~127
 //y:0~63
 //t:1 填充 0,清空	
-void OLED_DrawPoint(uint8_t x,uint8_t y,uint8_t mode, uint8_t is_wrapped)
+void oled_draw_px(uint8_t x,uint8_t y,uint8_t mode, uint8_t is_wrapped)
 {
 	uint8_t i,m,n;
 	i=y/8;
@@ -103,14 +103,14 @@ if (mode) {
     }
 
 	if(!is_wrapped)
-		OLED_Refresh();
+		oled_screen_update();
 }
 
 //画线
 //x1,y1:起点坐标
 //x2,y2:结束坐标
 //t:1 填充 0,清空
-void OLED_DrawLine(uint8_t x1,uint8_t y1,uint8_t x2,uint8_t y2,uint8_t mode, uint8_t is_wrapped)
+void oled_draw_line(uint8_t x1,uint8_t y1,uint8_t x2,uint8_t y2,uint8_t mode, uint8_t is_wrapped)
 {
 	short t; 
 	int xerr=0,yerr=0,delta_x,delta_y,distance;
@@ -129,7 +129,7 @@ void OLED_DrawLine(uint8_t x1,uint8_t y1,uint8_t x2,uint8_t y2,uint8_t mode, uin
 	else distance=delta_y;
 	for(t=0;t<distance+1;t++)
 	{
-		OLED_DrawPoint(uRow,uCol,mode,1);//画点
+		oled_draw_px(uRow,uCol,mode,1);//画点
 		xerr+=delta_x;
 		yerr+=delta_y;
 		if(xerr>distance)
@@ -145,14 +145,14 @@ void OLED_DrawLine(uint8_t x1,uint8_t y1,uint8_t x2,uint8_t y2,uint8_t mode, uin
 	}
 
 	if(!is_wrapped)
-		OLED_Refresh();
+		oled_screen_update();
 }
 
 //画四边形
 //x1,y1:UL坐标
 //x2,y2:DR坐标
 //mode:1 填充 0,清空
-void OLED_DrawTetragon(uint8_t x1,uint8_t y1,uint8_t x2,uint8_t y2,uint8_t mode, uint8_t is_wrapped)
+void oled_draw_rect(uint8_t x1,uint8_t y1,uint8_t x2,uint8_t y2,uint8_t mode, uint8_t is_wrapped)
 {
 	uint8_t memset_fromy=y1+(8-y1%8)%8, memset_toy=y2-y2%8;
 	for(int x=x1;x<=x2;x++)
@@ -160,19 +160,19 @@ void OLED_DrawTetragon(uint8_t x1,uint8_t y1,uint8_t x2,uint8_t y2,uint8_t mode,
 		if(memset_toy>memset_fromy)
 		{
 			for(int y=y1;y<memset_fromy;y++)//draw pt till next full byte
-				OLED_DrawPoint(x,y,mode,1);
+				oled_draw_px(x,y,mode,1);
 			memset(g_oled_buff[x]+(int)(memset_fromy/8),(mode?0xFF:0x00),(int)((memset_toy-memset_fromy)/8));
 			for(int y=memset_toy;y<=y2;y++)//draw pt till end
-			OLED_DrawPoint(x,y,mode,1);
+			oled_draw_px(x,y,mode,1);
 		}else
 		{
 			for(int y=y1;y<=y2;y++)//draw pt till next full byte
-				OLED_DrawPoint(x,y,mode,1);
+				oled_draw_px(x,y,mode,1);
 		}
 	}
 
 	if(!is_wrapped)
-		OLED_Refresh();
+		oled_screen_update();
 }
 
 //在指定位置显示一个字符,包括部分字符
@@ -180,7 +180,7 @@ void OLED_DrawTetragon(uint8_t x1,uint8_t y1,uint8_t x2,uint8_t y2,uint8_t mode,
 //y:0~63
 //size1:选择字体 16/24/48
 //mode:0,反色显示;1,正常显示
-void OLED_ShowChar(uint8_t x,uint8_t y,enum language lang, char* chr,uint8_t size,uint8_t mode, uint8_t is_wrapped)
+void oled_print_char(uint8_t x,uint8_t y,enum language lang, char* chr,uint8_t size,uint8_t mode, uint8_t is_wrapped)
 {
 	uint8_t byte, cur_byte_cont, bit, width, msk_size, msk_drop_bit=0;
 	uint8_t x0=x,y0=y,x_shift=0,y_shift=0;
@@ -196,9 +196,9 @@ void OLED_ShowChar(uint8_t x,uint8_t y,enum language lang, char* chr,uint8_t siz
 		for(bit=0;bit<8;bit++)
 		{
 			if(cur_byte_cont&0x01)//if cur bit need to draw or blank, then do so
-				OLED_DrawPoint(x+x_shift,y+y_shift,mode,1);
+				oled_draw_px(x+x_shift,y+y_shift,mode,1);
 			else
-				OLED_DrawPoint(x+x_shift,y+y_shift,!mode,1);
+				oled_draw_px(x+x_shift,y+y_shift,!mode,1);
 			cur_byte_cont>>=1;//shift right, see next bit
 			
 			x_shift++;//next pixel to draw
@@ -217,7 +217,7 @@ void OLED_ShowChar(uint8_t x,uint8_t y,enum language lang, char* chr,uint8_t siz
 		}
   }
   if(!is_wrapped)
-	OLED_Refresh();
+	oled_screen_update();
 }
 
 //在指定位置显示一个字符串
@@ -225,7 +225,7 @@ void OLED_ShowChar(uint8_t x,uint8_t y,enum language lang, char* chr,uint8_t siz
 //y:0~63
 //size:选择字体 16/24/48
 //mode:0,反色显示;1,正常显示
-void OLED_ShowStr(uint8_t x,uint8_t y, char* str,uint8_t size, uint8_t mode, uint8_t is_wrapped)
+void oled_print_str(uint8_t x,uint8_t y, char* str,uint8_t size, uint8_t mode, uint8_t is_wrapped)
 {
 	char* str_ptr=str;
 	uint8_t x_shift=0;
@@ -251,44 +251,43 @@ void OLED_ShowStr(uint8_t x,uint8_t y, char* str,uint8_t size, uint8_t mode, uin
 			chr[2]=*str_ptr++;
 			cur_lang=Hans;
 		}
-		OLED_ShowChar(x+x_shift, y, cur_lang, chr, size, mode, 1);
+		oled_print_char(x+x_shift, y, cur_lang, chr, size, mode, 1);
 		x_shift+=size/(cur_lang==Eng?2:1);//shift x, eng width = half size
 	}
 	if(!is_wrapped)
-		OLED_Refresh();
+		oled_screen_update();
 }
 
 
-void OLED_Init(void)
+void oled_init(void)
 {
     vTaskDelay(pdMS_TO_TICKS(200));
     
- 	OLED_WR_Byte(0xAE,OLED_CMD);//--turn off oled panel
-	OLED_WR_Byte(0x00,OLED_CMD);//---set low column address
-	OLED_WR_Byte(0x10,OLED_CMD);//---set high column address
-	OLED_WR_Byte(0x40,OLED_CMD);//--set start line address  Set Mapping RAM Display Start Line (0x00~0x3F)
-	OLED_WR_Byte(0x81,OLED_CMD);//--set contrast control register
-	OLED_WR_Byte(0xCF,OLED_CMD);// Set SEG Output Current Brightness
-	OLED_WR_Byte(0xA1,OLED_CMD);//--Set SEG/Column Mapping     0xa0左右反置 0xa1正常
-	OLED_WR_Byte(0xC8,OLED_CMD);//Set COM/Row Scan Direction   0xc0上下反置 0xc8正常
-	OLED_WR_Byte(0xA6,OLED_CMD);//--set normal display
-	OLED_WR_Byte(0xA8,OLED_CMD);//--set multiplex ratio(1 to 64)
-	OLED_WR_Byte(0x3f,OLED_CMD);//--1/64 duty
-	OLED_WR_Byte(0xD3,OLED_CMD);//-set display offset	Shift Mapping RAM Counter (0x00~0x3F)
-	OLED_WR_Byte(0x00,OLED_CMD);//-not offset
-	OLED_WR_Byte(0xd5,OLED_CMD);//--set display clock divide ratio/oscillator frequency
-	OLED_WR_Byte(0x80,OLED_CMD);//--set divide ratio, Set Clock as 100 Frames/Sec
-	OLED_WR_Byte(0xD9,OLED_CMD);//--set pre-charge period
-	OLED_WR_Byte(0xF1,OLED_CMD);//Set Pre-Charge as 15 Clocks & Discharge as 1 Clock
-	OLED_WR_Byte(0xDA,OLED_CMD);//--set com pins hardware configuration
-	OLED_WR_Byte(0x12,OLED_CMD);
-	OLED_WR_Byte(0xDB,OLED_CMD);//--set vcomh
-	OLED_WR_Byte(0x30,OLED_CMD);//Set VCOM Deselect Level
-	OLED_WR_Byte(0x20,OLED_CMD);//-Set Page Addressing Mode (0x00/0x01/0x02)
-	OLED_WR_Byte(0x02,OLED_CMD);//
-	OLED_WR_Byte(0x8D,OLED_CMD);//--set Charge Pump enable/disable
-	OLED_WR_Byte(0x14,OLED_CMD);//--set(0x10) disable
-	OLED_WR_Byte(0xAF,OLED_CMD);
-	OLED_Clear();//clear screen
+ 	oled_write_byte(0xAE,OLED_CMD);//--turn off oled panel
+	oled_write_byte(0x00,OLED_CMD);//---set low column address
+	oled_write_byte(0x10,OLED_CMD);//---set high column address
+	oled_write_byte(0x40,OLED_CMD);//--set start line address  Set Mapping RAM Display Start Line (0x00~0x3F)
+	oled_write_byte(0x81,OLED_CMD);//--set contrast control register
+	oled_write_byte(0xCF,OLED_CMD);// Set SEG Output Current Brightness
+	oled_write_byte(0xA1,OLED_CMD);//--Set SEG/Column Mapping     0xa0左右反置 0xa1正常
+	oled_write_byte(0xC8,OLED_CMD);//Set COM/Row Scan Direction   0xc0上下反置 0xc8正常
+	oled_write_byte(0xA6,OLED_CMD);//--set normal display
+	oled_write_byte(0xA8,OLED_CMD);//--set multiplex ratio(1 to 64)
+	oled_write_byte(0x3f,OLED_CMD);//--1/64 duty
+	oled_write_byte(0xD3,OLED_CMD);//-set display offset	Shift Mapping RAM Counter (0x00~0x3F)
+	oled_write_byte(0x00,OLED_CMD);//-not offset
+	oled_write_byte(0xd5,OLED_CMD);//--set display clock divide ratio/oscillator frequency
+	oled_write_byte(0x80,OLED_CMD);//--set divide ratio, Set Clock as 100 Frames/Sec
+	oled_write_byte(0xD9,OLED_CMD);//--set pre-charge period
+	oled_write_byte(0xF1,OLED_CMD);//Set Pre-Charge as 15 Clocks & Discharge as 1 Clock
+	oled_write_byte(0xDA,OLED_CMD);//--set com pins hardware configuration
+	oled_write_byte(0x12,OLED_CMD);
+	oled_write_byte(0xDB,OLED_CMD);//--set vcomh
+	oled_write_byte(0x30,OLED_CMD);//Set VCOM Deselect Level
+	oled_write_byte(0x20,OLED_CMD);//-Set Page Addressing Mode (0x00/0x01/0x02)
+	oled_write_byte(0x02,OLED_CMD);//
+	oled_write_byte(0x8D,OLED_CMD);//--set Charge Pump enable/disable
+	oled_write_byte(0x14,OLED_CMD);//--set(0x10) disable
+	oled_write_byte(0xAF,OLED_CMD);
+	oled_screen_clear();//clear screen
 }
-

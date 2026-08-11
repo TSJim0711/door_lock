@@ -19,13 +19,6 @@
 #define UART1_BUFF_SIZE      256
 #define UART1_MAX_RW_LEN      72
 
-// 类型定义
-#define   uchar                 unsigned char
-#define   uint                  unsigned  int
-#define   ulong                 unsigned long
-
-#define   FALSE                 0x00
-#define   TRUE                  0x01
 #define   LACK_ARG              0xff
 #define   OVER_TIME_S		0xfe
 #define   OVER_TIME_R		0xfd// 时间常数定义
@@ -41,17 +34,16 @@
 #define   FG_GETIMG_CNT   	2 		// 自动注册待指次数，只能设置为2或3
 #define   FG_GETIMG_DLY   	0x80 		// 采样间隔，高四位有效，0x00时无间隔，0xF0间隔最大，可根据实际调整
     
-enum fg_status_list{FG_BORED,FG_REG,FG_PEND,FG_PEND_N_SIGNIN,FG_DEL,FG_CUR_DEL};//待机，注册指纹，判定指纹，删除指纹,删除目前识别到的指纹
-volatile extern enum fg_status_list g_fg_status;//what this reader needs to do?
-volatile extern enum fg_status_list g_fg_status_2B; //g_fg_status may be mutex lock in future, lets change that at very last time 
+enum fg_status_e{FG_STATE_IDLE,FG_STATE_ENROLL,FG_STATE_SEARCH,FG_SEARCH_N_SIGNIN,FG_DEL_ALL,FG_DEL_CUR};//待机，注册指纹，判定指纹，删除指纹,删除目前识别到的指纹
+volatile extern enum fg_status_e g_fg_next_state; //s_fg_state may be mutex lock in future, lets change that at very last time 
 
 
 //outer functions
 void fg_init(void);
 
-void CloseFG(void);
-uchar OpenFG(void);
-unsigned short fg_search_fetch_id(void);
+void fg_sleep(void);
+uint8_t fg_wake(void);
+unsigned short fg_identified_fetch_id(void);
 
 //btn pressed signal
 extern SemaphoreHandle_t g_fg_pressed_sem;

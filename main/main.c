@@ -16,19 +16,19 @@
 #define GPIO_LED_GREEN GPIO_NUM_6
 
 static void IRAM_ATTR btn_gpio_isr_handler(void* arg) {//switch fingprint reader to do
-    if(g_fg_status_2B==FG_BORED||g_fg_status_2B==FG_PEND_N_SIGNIN)
+    if(g_fg_next_state==FG_STATE_IDLE||g_fg_next_state==FG_SEARCH_N_SIGNIN)
     {
-        g_fg_status_2B=FG_REG;
+        g_fg_next_state=FG_STATE_ENROLL;
         ESP_EARLY_LOGI("FG","FG Reg");
     }
-    else if (g_fg_status_2B==FG_REG)
+    else if (g_fg_next_state==FG_STATE_ENROLL)
     {
-        g_fg_status_2B=FG_DEL;
+        g_fg_next_state=FG_DEL_ALL;
         ESP_EARLY_LOGI("FG","FG Del");
     }
-    else if (g_fg_status_2B==FG_DEL)
+    else if (g_fg_next_state==FG_DEL_ALL)
     {
-        g_fg_status_2B=FG_PEND_N_SIGNIN;
+        g_fg_next_state=FG_SEARCH_N_SIGNIN;
         ESP_EARLY_LOGI("FG","FG Bored");
     }
 }
@@ -38,28 +38,27 @@ static void IRAM_ATTR fg_on_touch_handler(void* arg) //someone puts there finger
     ESP_EARLY_LOGI("FG","Finger detected");
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     //send a ticket through signal
-    xSemaphoreGiveFromISR(g_fg_pressed_sem, &xHigherPriorityTaskWoken);//piority check
-    if (xHigherPriorityTaskWoken) {//if fg_service is highest piority then run now
+    xSemaphoreGiveFromISR(g_fg_pressed_sem, &xHigherPriorityTaskWoken);//priority check
+    if (xHigherPriorityTaskWoken) {//if fg_service is highest priority then run now
         portYIELD_FROM_ISR();
     }
 }
 
-volatile unsigned int userid_unlock_door=0;//the user id qwqwho unlock the door
 SemaphoreHandle_t g_dr_unlock_sem = NULL;
 void door_lock_task(void *pvParameters) {
-    int relock_countdown = 0;
+    int countdown_cnt = 0;
     
-    //defualt: red led on, green off
+    //default: red led on, green off
     gpio_set_level(GPIO_LED_GREEN, 0);
     gpio_set_level(GPIO_LED_RED, 1);
 
     char print_buff[64];
-    OLED_ShowStr(10,5,"门已上锁!",24,1,0);
-    OLED_ShowStr(10,30,"Door Locked",24,1,0);
+    oled_print_str(10,5,"门已上锁!",24,1,0);
+    oled_print_str(10,30,"Door Locked",24,1,0);
 
     while (1) {
         //if in countdown then wait 50ms, else wait till die
-        TickType_t xTicksToWait = (relock_countdown > 0) ? pdMS_TO_TICKS(50) : portMAX_DELAY;
+        TickType_t xTicksToWait = (countdown_cnt > 0) ? pdMS_TO_TICKS(50) : portMAX_DELAY;
 
         //wait or if has ticket, then go on
         if (xSemaphoreTake(g_dr_unlock_sem, xTicksToWait) == pdTRUE) {
@@ -67,45 +66,45 @@ void door_lock_task(void *pvParameters) {
             printf("Unlocked.\n");
             gpio_set_level(GPIO_LED_GREEN, 1);
             gpio_set_level(GPIO_LED_RED, 0);
-            OLED_Clear();
-            sprintf(print_buff,"你好id:%d住户,\n",fg_search_fetch_id());
-            OLED_ShowStr(10,5,print_buff,24,1,0);
-            OLED_ShowStr(10,30,"门已开锁!",24,1,0);
-            relock_countdown = 200; // 200 * 50ms = 10s countdown
+            oled_screen_clear();
+            sprintf(print_buff,"你好id:%d住户,\n",fg_identified_fetch_id());
+            oled_print_str(10,5,print_buff,24,1,0);
+            oled_print_str(10,30,"门已开锁!",24,1,0);
+            countdown_cnt = 200; // 200 * 50ms = 10s countdown
         }
 
         //countdown
-        relock_countdown--;
-        if(relock_countdown%20==0)//20*50ms =1s, print countdown per sec
+        countdown_cnt--;
+        if(countdown_cnt%20==0)//20*50ms =1s, print countdown per sec
         {
-            printf("%ds left...\n", relock_countdown/20);
+            printf("%ds left...\n", countdown_cnt/20);
 
-            OLED_DrawTetragon(10,5,106,29,0,0);
-            sprintf(print_buff,"还剩%d时",relock_countdown/20);
-            OLED_ShowStr(10,5,print_buff,24,1,0);
-            OLED_ShowStr(10,30,"Door unlocked,",16,1,0);
-            OLED_DrawTetragon(10,46,22,29,0,0);
-            sprintf(print_buff,"%d sec left.",relock_countdown/20);
-            OLED_ShowStr(10,46,print_buff,16,1,0);
+            oled_draw_rect(10,5,106,29,0,0);
+            sprintf(print_buff,"还剩%d时",countdown_cnt/20);
+            oled_print_str(10,5,print_buff,24,1,0);
+            oled_print_str(10,30,"Door unlocked,",16,1,0);
+            oled_draw_rect(10,46,22,29,0,0);
+            sprintf(print_buff,"%d sec left.",countdown_cnt/20);
+            oled_print_str(10,46,print_buff,16,1,0);
         }
 
         //time running, green led flash
-        if (relock_countdown <= 80 && relock_countdown > 0) {
+        if (countdown_cnt <= 80 && countdown_cnt > 0) {
             //flash faster when  less time left
-            int blink_freq = ((relock_countdown+1)/ 10) + 1;
-            if (relock_countdown % blink_freq == 0) {
+            int blink_freq = ((countdown_cnt+1)/ 10) + 1;
+            if (countdown_cnt % blink_freq == 0) {
                 gpio_set_level(GPIO_LED_GREEN, !gpio_get_level(GPIO_LED_GREEN));
             }
         }
 
         //countdown end, red led on, green off
-        if (relock_countdown == 0) {
+        if (countdown_cnt == 0) {
             printf("Locked!\n");
             gpio_set_level(GPIO_LED_GREEN, 0);
             gpio_set_level(GPIO_LED_RED, 1);
-            OLED_Clear();
-            OLED_ShowStr(10,5,"门已上锁",24,1,0);
-            OLED_ShowStr(10,30,"Door Locked",16,1,0);
+            oled_screen_clear();
+            oled_print_str(10,5,"门已上锁",24,1,0);
+            oled_print_str(10,30,"Door Locked",16,1,0);
         }
     }
 }
@@ -134,7 +133,7 @@ void app_main(void) {
 
     //init i2c & oled
     i2c_master_init();
-    OLED_Init();
+    oled_init();
     
     //init fingerprint reader
     fg_init();

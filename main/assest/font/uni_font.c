@@ -11,24 +11,24 @@ unsigned char const * get_char_msk(enum language lang,uint8_t size,char* chr)
         {
             do
             {
-                if(strcmp(en_font24[idx].index,chr)==0)
+                if(strcmp(font24_en[idx].index,chr)==0)
                 {
-                    return &(en_font24[idx].msk[0]);
+                    return &(font24_en[idx].msk[0]);
                     break;
                 }
                 idx++;
-            }while(en_font24[idx].index[0]!='\0');
+            }while(font24_en[idx].index[0]!='\0');
         }else if(size==16)
         {
             do
             {
-                if(strcmp(en_font16[idx].index,chr)==0)
+                if(strcmp(font16_en[idx].index,chr)==0)
                 {
-                    return &(en_font16[idx].msk[0]);
+                    return &(font16_en[idx].msk[0]);
                     break;
                 }
                 idx++;
-            }while(en_font16[idx].index[0]!='\0');
+            }while(font16_en[idx].index[0]!='\0');
         }
 
     }else if(lang==Hans || lang==Hant)
@@ -37,13 +37,13 @@ unsigned char const * get_char_msk(enum language lang,uint8_t size,char* chr)
         {
             do
             {
-                if(strcmp(zh_font24[idx].index,chr)==0)
+                if(strcmp(font24_zh[idx].index,chr)==0)
                 {
-                    return &(zh_font24[idx].msk[0]);
+                    return &(font24_zh[idx].msk[0]);
                     break;
                 }
                 idx++;
-            }while(zh_font24[idx].index[0]!='\0');
+            }while(font24_zh[idx].index[0]!='\0');
         }
     }
     return NULL;
