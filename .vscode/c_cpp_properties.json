@@ -2,10 +2,8 @@
     "configurations": [
         {
             "name": "ESP-IDF",
-            "compilerPath": "C:\\Program Files\\msys2\\ucrt64\\bin\\gcc.exe",
-            "compileCommands": [
-                "${config:idf.buildPath}/compile_commands.json"
-            ],
+            "compilerPath": "/usr/bin/gcc",
+            "compileCommands": "${workspaceFolder}/build/compile_commands.json",
             "intelliSenseMode": "gcc-x64",
             "includePath": [
                 "${workspaceFolder}/**"
