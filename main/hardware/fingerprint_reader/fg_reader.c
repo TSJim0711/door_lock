@@ -22,6 +22,7 @@ volatile uint8_t s_uart_tx_buf[UART1_MAX_RW_LEN];                // 发送包预
 volatile uint8_t s_uart_rx_buf[UART1_MAX_RW_LEN]={0};                // 应答包缓存
 volatile enum fg_status_e s_fg_state=FG_STATE_IDLE,g_fg_next_state=FG_SEARCH_N_SIGNIN; //what reader wwill do?
 volatile short g_v_identified_id=0;
+activity_t* g_activity_fg_reader;
 //=============================================================//
 
 // 调用变量 ===================================================//
@@ -83,10 +84,9 @@ void fg_init(void)
     */
     gpio_reset_pin(GPIO_FGREAD_POWER);
     gpio_set_direction(GPIO_FGREAD_POWER, GPIO_MODE_OUTPUT);//pwr for hi performace cal
-    gpio_set_level(GPIO_FGREAD_POWER, 0); //cut main power, stay eco mode
+    gpio_set_level(GPIO_FGREAD_POWER, 1); //cut main power, stay eco mode
 }
 //=============================================================//
-
 
 
 
@@ -233,6 +233,7 @@ uint8_t fg_wake(void)
 uint8_t fg_enroll(uint16_t id)
 {
     if (id >= FG_MAX) return false;                            // 参数输入错误
+    strncpy(((view_title_content_t*)(activity_stack_peek()->view_structure))->tc_title,"Enroll",32);
 
     s_uart_tx_buf[0] = 0x01;                                             // 包标志，1命令包
     s_uart_tx_buf[1] = 0x00;                                             // 包长度，高8位
@@ -247,13 +248,14 @@ uint8_t fg_enroll(uint16_t id)
     s_uart_tx_buf[9] = (uint8_t)(calc_sum >> 8);   // 高 8 位
     s_uart_tx_buf[10] = (uint8_t)(calc_sum & 0xFF); // 低 8 位
 
+    const TickType_t xTimeoutTicks = pdMS_TO_TICKS(5000); //5s内完成
+    TickType_t xStartTime = xTaskGetTickCount();
+    
     uart_flush_input(UART_PORT_1);//clean up UART1
     uart_write_bytes(UART_PORT_1, (const uint8_t*)FG_BAGHEAD, sizeof(FG_BAGHEAD));
     uart_write_bytes(UART_PORT_1, (const uint8_t*)s_uart_tx_buf, 11);
-
-    const TickType_t xTimeoutTicks = pdMS_TO_TICKS(10000); //10s内完成
-    TickType_t xStartTime = xTaskGetTickCount();
     
+    char print_buff[WIDGET_CONTENT_MAXSIZE];
     ESP_EARLY_LOGI("FG","ADDFG request sent");
     while((xTaskGetTickCount() - xStartTime) < xTimeoutTicks)
     {   
@@ -283,22 +285,45 @@ uint8_t fg_enroll(uint16_t id)
                 continue;
             }
             
-            if(s_uart_rx_buf[9]==0x00)
+            if(s_uart_rx_buf[9]==0x00)//something success
             {
                 printf("success.\n");
+                xStartTime = xTaskGetTickCount();//reset timmer
+                if(s_uart_rx_buf[10]==0x03)//tell user retap sensor
+                {
+                    sprintf(print_buff,"/8] done, pls retap[%d.",s_uart_rx_buf[11]);
+                    strncpy(((view_title_content_t*)(activity_stack_peek()->view_structure))->tc_content,print_buff,64);
+                    activity_screen_refresh();
+                    continue;
+                }
+
                 if(s_uart_rx_buf[10]==0x06 && s_uart_rx_buf[11]==0xf2)
+                {
+                    strncpy(((view_title_content_t*)(activity_stack_peek()->view_structure))->tc_content,"Done. Thank you.",64);
+                    activity_screen_refresh();
                     return true;
+                }
             }
             else
             {
                 if(s_uart_rx_buf[9]==0x1f)
                     printf("fail as storage full.\n");
                 else if(s_uart_rx_buf[9]==0x26)
+                {
                     printf("fail as timeout.\n");
+                    strncpy(((view_title_content_t*)(activity_stack_peek()->view_structure))->tc_content,"Fail: Time out.",64);
+                }
                 else if(s_uart_rx_buf[9]==0x27)
+                {
                     printf("fail as this fingerprint exist in system\n");
+                    strncpy(((view_title_content_t*)(activity_stack_peek()->view_structure))->tc_content,"Fail: FG re-enroll.",64);
+                }
                 else
+                {
                     printf("fail.\n");
+                    strncpy(((view_title_content_t*)(activity_stack_peek()->view_structure))->tc_content,"Fail, Pls check log.",64);
+                }
+                activity_screen_refresh();
                 return false;
             }  
         }
@@ -349,6 +374,9 @@ uint8_t fg_identify(void)
 {
     uint8_t state;
     ESP_EARLY_LOGI("FG","Search try");
+    strncpy(((view_title_content_t*)(activity_stack_peek()->view_structure))->tc_title,"Identify",32);
+    strncpy(((view_title_content_t*)(activity_stack_peek()->view_structure))->tc_content,"Reading sensor...",64);
+    activity_screen_refresh();
     
     uart_flush_input(UART_PORT_1);//clean up UART1
     if(!fg_read_sensor())//load fg to buffer for indfy
@@ -367,12 +395,22 @@ uint8_t fg_identify(void)
                 return true;
             }
             else
+            {
                 printf("Not confident FG, id:%d, score:%d\n",g_v_identified_id,identified_fg_id_score);
+                strncpy(((view_title_content_t*)(activity_stack_peek()->view_structure))->tc_content,"Not confident with result.",64);
+            }
         }                 
         else if (s_uart_rx_buf[9] == 0x09)
+        {
             printf("FG never Enroll.\n");
+            strncpy(((view_title_content_t*)(activity_stack_peek()->view_structure))->tc_content,"Not reconized.",64);
+        }
         else
+        {
             printf("Search failed.\n");
+            strncpy(((view_title_content_t*)(activity_stack_peek()->view_structure))->tc_content,"Some error occurs.",64);
+        }        
+        activity_screen_refresh();
         return false;
     };
     return false;
@@ -398,14 +436,19 @@ unsigned short fg_identified_fetch_id(void)//user id who unlock the door
 //=============================================================//
 uint8_t fg_del_allfg(void)
 {
+    strncpy(((view_title_content_t*)(activity_stack_peek()->view_structure))->tc_title,"Delete FGs",32);
     if(fg_cmd_transmit(FG_CLEAR_ALL_FG,sizeof(FG_CLEAR_ALL_FG),500))                                   // 发送清空命令
     {   
         if(s_uart_rx_buf[9]==0x00)
         {
+            strncpy(((view_title_content_t*)(activity_stack_peek()->view_structure))->tc_title,"Delete Success",64);
+            activity_screen_refresh();
             printf("Succ clear all fg.\n");
             return true;
         }
     }
+    strncpy(((view_title_content_t*)(activity_stack_peek()->view_structure))->tc_title,"Delete Failed",64);
+    activity_screen_refresh();
     return false;
 }
 //=============================================================//
@@ -423,19 +466,25 @@ void fg_service (void *pvParameters)
             s_fg_state=g_fg_next_state;//lock in status
             ESP_EARLY_LOGI("FG","Finger pressed on fg reader, will do:%d",s_fg_state);
             fg_wake();
+            activity_run(g_activity_fg_reader);
             if(s_fg_state==FG_STATE_IDLE || s_fg_state==FG_STATE_SEARCH||s_fg_state==FG_SEARCH_N_SIGNIN)
             {
                 status=fg_identify();
-                if(s_fg_state==FG_SEARCH_N_SIGNIN  && status==true)
+                if(s_fg_state==FG_SEARCH_N_SIGNIN  && status==true)//did match
                 {
                     ESP_EARLY_LOGI("FG", "Pass, unlocking door.");
                     //unlock door
+                    activity_back();//remove fg read activity
                     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
                     //send a ticket through signal
                     xSemaphoreGiveFromISR(g_dr_unlock_sem, &xHigherPriorityTaskWoken);//priority check
                     if (xHigherPriorityTaskWoken) {//if tsk_doorLock is highest priority then run now
                         portYIELD_FROM_ISR();
                     }
+                    fg_sleep();//fg readder eco mode
+                    vTaskDelay(pdMS_TO_TICKS(800));//Giving time for finger to lift
+                    if(xSemaphoreTake(g_fg_pressed_sem, portMAX_DELAY) == pdTRUE) {};//spend 1 ticket
+                    continue;
                 }
             }
             if(s_fg_state==FG_STATE_ENROLL)//registrate a finger print
@@ -452,6 +501,8 @@ void fg_service (void *pvParameters)
             //    DelFG(fg_indentified_fetch_id(),1);//del that
             //}
             fg_sleep();
+            vTaskDelay(pdMS_TO_TICKS(800));//Giving time for finger to lift
+            activity_back();//back to home activity
         }
         if(xSemaphoreTake(g_fg_pressed_sem, portMAX_DELAY) == pdTRUE) {};//spend 1 ticket
     }

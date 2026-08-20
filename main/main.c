@@ -11,13 +11,13 @@
 #include "oled.h"
 #include "fg_reader.h"
 #include "uni_input.h"
+#include "activity.h"
 
 #define GPIO_LED_RED   GPIO_NUM_21
 #define GPIO_LED_GREEN GPIO_NUM_20
 
 static void IRAM_ATTR fg_on_touch_handler(void* arg) //someone puts there finger on sensor
 {
-    ESP_EARLY_LOGI("FG","Finger detected");
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     //send a ticket through signal
     xSemaphoreGiveFromISR(g_fg_pressed_sem, &xHigherPriorityTaskWoken);//priority check
@@ -27,6 +27,7 @@ static void IRAM_ATTR fg_on_touch_handler(void* arg) //someone puts there finger
 }
 
 SemaphoreHandle_t g_dr_unlock_sem = NULL;
+activity_t* activity_door_unlock;
 void door_lock_task(void *pvParameters) {
     int countdown_cnt = 0;
     
@@ -35,23 +36,24 @@ void door_lock_task(void *pvParameters) {
     gpio_set_level(GPIO_LED_RED, 1);
 
     char print_buff[64];
-    oled_print_str(10,5,"门已上锁!",24,1,0);
-    oled_print_str(10,30,"Door Locked",24,1,0);
 
     while (1) {
         //if in countdown then wait 50ms, else wait till die
         TickType_t xTicksToWait = (countdown_cnt > 0) ? pdMS_TO_TICKS(50) : portMAX_DELAY;
 
         //wait or if has ticket, then go on
-        if (xSemaphoreTake(g_dr_unlock_sem, xTicksToWait) == pdTRUE) {
+        if (xSemaphoreTake(g_dr_unlock_sem, xTicksToWait) == pdTRUE) 
+        {
             //if have ticket(just pressed btn) reset timmer, green led on, red led off
             printf("Unlocked.\n");
             gpio_set_level(GPIO_LED_GREEN, 1);
             gpio_set_level(GPIO_LED_RED, 0);
-            oled_screen_clear();
-            sprintf(print_buff,"你好id:%d住户,\n",fg_identified_fetch_id());
-            oled_print_str(10,5,print_buff,24,1,0);
-            oled_print_str(10,30,"门已开锁!",24,1,0);
+            //load activity
+            activity_run(activity_door_unlock);
+            strncpy(((view_title_content_t*)(activity_stack_peek()->view_structure))->tc_title,"门已开锁!",32);
+            sprintf(print_buff,"Welcome id:%d",fg_identified_fetch_id());
+            strncpy(((view_title_content_t*)(activity_stack_peek()->view_structure))->tc_content,print_buff,64);
+            activity_screen_refresh();
             countdown_cnt = 200; // 200 * 50ms = 10s countdown
         }
 
@@ -62,12 +64,9 @@ void door_lock_task(void *pvParameters) {
             printf("%ds left...\n", countdown_cnt/20);
 
             oled_draw_rect(10,5,106,29,0,0);
-            sprintf(print_buff,"还剩%d时",countdown_cnt/20);
-            oled_print_str(10,5,print_buff,24,1,0);
-            oled_print_str(10,30,"Door unlocked,",16,1,0);
-            oled_draw_rect(10,46,22,29,0,0);
-            sprintf(print_buff,"%d sec left.",countdown_cnt/20);
-            oled_print_str(10,46,print_buff,16,1,0);
+            sprintf(print_buff,"%ds left",countdown_cnt/20);
+            strncpy(((view_title_content_t*)(activity_stack_peek()->view_structure))->tc_content,print_buff,64);
+            activity_screen_refresh();
         }
 
         //time running, green led flash
@@ -84,9 +83,7 @@ void door_lock_task(void *pvParameters) {
             printf("Locked!\n");
             gpio_set_level(GPIO_LED_GREEN, 0);
             gpio_set_level(GPIO_LED_RED, 1);
-            oled_screen_clear();
-            oled_print_str(10,5,"门已上锁",24,1,0);
-            oled_print_str(10,30,"Door Locked",16,1,0);
+            activity_back();
         }
     }
 }
@@ -109,12 +106,12 @@ void psw_interface(void *pvParameters)
             {
                 //switch to psw input interface
                 oled_screen_clear();
-                oled_print_str(10,2,"Key in",24,1,0);
+                //oled_print_str(10,2,"Key in",24,1,0);
             }
             *psw_buff_ptr=input_buff_pop();//pop an input from buff
             psw_buff_ptr++;
             sprintf(disp_buff,"[%-3.3s:%-3.3s]",psw_buff,psw_buff+3);//disp cur psw buff
-            oled_print_str(10,28,disp_buff,16,0,0);
+            //oled_print_str(10,28,disp_buff,16,0,0);
             if(psw_buff_ptr==&psw_buff[6])//if get 6 char, determine if valid password
             {
                 if(strcmp(psw_buff,"123456")==0)
@@ -130,9 +127,9 @@ void psw_interface(void *pvParameters)
                 else
                 {
                     oled_screen_clear();
-                    oled_print_str(10,2,"Psw Err",24,1,0);
-                    oled_print_str(10,28,"U've entered.",16,1,0);
-                    oled_print_str(10,46,"wrong password.",16,1,0);
+                    //oled_print_str(10,2,"Psw Err",24,1,0);
+                    //oled_print_str(10,28,"U've entered.",16,1,0);
+                    //oled_print_str(10,46,"wrong password.",16,1,0);
                     countdown_cnt=1;//reset screen after 1sec
                 }
                 psw_buff_ptr=&psw_buff[0];//clear psw buff
@@ -148,23 +145,22 @@ void psw_interface(void *pvParameters)
             for(int short i=0; i<6;i++)
                 psw_buff[i]='x';
             oled_screen_clear();
-            oled_print_str(10,5,"门已上锁",24,1,0);
-            oled_print_str(10,30,"Door Locked",16,1,0);
+            //oled_print_str(10,5,"门已上锁",24,1,0);
+            //oled_print_str(10,30,"Door Locked",16,1,0);
         }
         else
         {
             sprintf(disp_buff,"%.2d sec left.",countdown_cnt);
-            oled_print_str(10,46,disp_buff,16,1,0);
+            //oled_print_str(10,46,disp_buff,16,1,0);
         }
 
     }    
 }
 
-void app_main(void) {
-    //create signal tunnel
+void app_main(void) 
+{
     g_dr_unlock_sem = xSemaphoreCreateBinary();
     g_fg_pressed_sem = xSemaphoreCreateBinary();
-    g_input_psw_sem = xSemaphoreCreateCounting(INPUT_BUFF_SIZE,0);
 
     //config gpio for led
     gpio_reset_pin(GPIO_LED_RED);
@@ -192,9 +188,12 @@ void app_main(void) {
     keypad_init();
     btn_init();
 
-    //create doorlock service
+    //prepare ui
+    g_activity_fg_reader=activity_create(VIEW_TITLE_CONTENT,"3",view_title_content_setup("", ""));
+    activity_door_unlock=activity_create(VIEW_TITLE_CONTENT,"2",view_title_content_setup("FG Reader", "Please wait..."));
+    activity_run(activity_create(VIEW_TITLE_CONTENT,"1",view_title_content_setup("Hi there", "Door Locked")));
+
+    //run hardware func
     xTaskCreate(door_lock_task, "tsk_doorLock", 4096, NULL, 10, NULL);
     xTaskCreate(fg_service, "tsk_fg_reader_service", 4096, NULL, 10, NULL);
-    xTaskCreate(psw_interface, "tsk_fg_reader_service", 4096, NULL, 10, NULL);
-    vTaskDelete(NULL);
 }

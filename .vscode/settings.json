@@ -1,5 +1,13 @@
 {
   "idf.flashType": "UART",
   "idf.currentSetup": "/home/tsj/esp/esp-idf",
-  "idf.port": "/dev/ttyACM0"
+  "idf.port": "/dev/ttyACM0",
+
+"clangd.arguments": [
+    "--compile-commands-dir=${workspaceFolder}/build",
+    "--query-driver=**",
+    "--background-index",
+    "--clang-tidy",
+    "--header-insertion=never"
+  ]
 }

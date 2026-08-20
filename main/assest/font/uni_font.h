@@ -2,7 +2,7 @@
 #define FONT_MSK_H
 #include <stdint.h>
 
-enum language {Hans,Hant,Eng,Symbo,Emoji};
+enum language_e {Hans,Hant,Eng,Symbo,Emoji};
 
 typedef struct mskkit72 {
     unsigned char msk[72];
@@ -24,6 +24,6 @@ extern const mskkit48 font24_en[];
 extern const mskkit16 font16_en[];
 
 
-unsigned char const * get_char_msk(enum language lang,uint8_t size,char* chr);
+unsigned char const * get_char_msk(enum language_e lang,uint8_t size,char* chr);
 
 #endif

@@ -7,6 +7,8 @@
 #include "driver/gpio.h"
 #include "driver/uart.h"
 
+#include "activity.h"
+
 //pin def
 #define GPIO_FGREAD_TXD GPIO_NUM_11
 #define GPIO_FGREAD_RXD GPIO_NUM_12
@@ -37,6 +39,8 @@
 enum fg_status_e{FG_STATE_IDLE,FG_STATE_ENROLL,FG_STATE_SEARCH,FG_SEARCH_N_SIGNIN,FG_DEL_ALL,FG_DEL_CUR};//待机，注册指纹，判定指纹，删除指纹,删除目前识别到的指纹
 volatile extern enum fg_status_e g_fg_next_state; //s_fg_state may be mutex lock in future, lets change that at very last time 
 
+//fg_reader ui
+extern activity_t* g_activity_fg_reader;
 
 //outer functions
 void fg_init(void);
@@ -48,6 +52,4 @@ unsigned short fg_identified_fetch_id(void);
 //btn pressed signal
 extern SemaphoreHandle_t g_fg_pressed_sem;
 void fg_service (void *pvParameters);
-
-
 #endif

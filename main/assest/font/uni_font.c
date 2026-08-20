@@ -2,7 +2,7 @@
 #include <string.h>
 #include "uni_font.h"
 
-unsigned char const * get_char_msk(enum language lang,uint8_t size,char* chr)
+unsigned char const * get_char_msk(enum language_e lang,uint8_t size,char* chr)
 {
     int idx=0;
     if(lang==Eng)
