@@ -6,13 +6,16 @@
 #define WIDGET_CONTENT_MAXSIZE 64
 
 enum language_e {Hans,Hant,Eng,Symbo,Emoji};
+enum align_e{ALIGN_TOP_LEFT=0x00,ALIGN_TOP_MID,ALIGN_TOP_RIGHT,ALIGN_MID_LEFT=0x04,ALIGN_MID_MID,ALIGN_MID_RIGHT,ALIGN_BOTTOM_LEFT=0x08,ALIGN_BOTTOM_MID,ALIGN_BOTTOM_RIGHT};
 
 //LABEL; to display text.
 typedef struct wdg_label_style_t
 {
     uint8_t font_size;
-    bool inv_clr;//invert color, to let background be white and char be black
-    bool boxed;//unable to use
+    enum align_e align;
+    bool txt_clr;//text color, black or white
+    bool bg_clr;//trasparent or full white
+    bool boxed;//unable to use lol
 }wdg_label_style_t;
 
 //pakage
@@ -35,5 +38,5 @@ struct widget_id_t
 };
 
 //Label function
-widget_id_t* wdg_lable_setup(uint16_t ul_x,uint16_t ul_y,uint16_t dr_x,uint16_t dr_y,char* content,uint8_t font_size, bool fill_bg, bool boxed);
+widget_id_t* wdg_lable_setup (uint16_t ul_x,uint16_t ul_y,uint16_t dr_x,uint16_t dr_y,char* content,uint8_t font_size,enum align_e align, bool txt_clr,uint8_t bg_clr, bool boxed);
 void wdg_lable_draw(widget_id_t const * wdg_id);

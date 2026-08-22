@@ -30,11 +30,11 @@ view_title_content_t* view_title_content_setup (char* title, char* content)
         new_view->stated_widget[i]=NULL;
     
     //load title_content widget
-    widget_id_t* wdg_id_addr=wdg_lable_setup(0,0,127,24,title,24,0,0);//create label
+    widget_id_t* wdg_id_addr=wdg_lable_setup(0,0,127,24,title,24,ALIGN_TOP_MID,0,1,0);//create label
     view_state_widget((view_widget_arr_only*)new_view,wdg_id_addr);//load wdg to activity
     new_view->tc_title=wdg_id_addr->widget_content;//link title to label str
 
-    wdg_id_addr=wdg_lable_setup(0,28,127,63,content,16,1,0);//create label
+    wdg_id_addr=wdg_lable_setup(0,25,127,63,content,16,ALIGN_MID_LEFT,1,0,0);//create label
     view_state_widget((view_widget_arr_only*)new_view,wdg_id_addr);//load wdg to activity
     new_view->tc_content=wdg_id_addr->widget_content;//link title to label str
     return new_view;

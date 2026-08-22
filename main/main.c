@@ -18,6 +18,7 @@
 
 static void IRAM_ATTR fg_on_touch_handler(void* arg) //someone puts there finger on sensor
 {
+    ESP_EARLY_LOGI("FG", "SX TRIGGERED========================");
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     //send a ticket through signal
     xSemaphoreGiveFromISR(g_fg_pressed_sem, &xHigherPriorityTaskWoken);//priority check
@@ -189,9 +190,9 @@ void app_main(void)
     btn_init();
 
     //prepare ui
-    g_activity_fg_reader=activity_create(VIEW_TITLE_CONTENT,"3",view_title_content_setup("", ""));
-    activity_door_unlock=activity_create(VIEW_TITLE_CONTENT,"2",view_title_content_setup("FG Reader", "Please wait..."));
-    activity_run(activity_create(VIEW_TITLE_CONTENT,"1",view_title_content_setup("Hi there", "Door Locked")));
+    g_activity_fg_reader=activity_create(VIEW_TITLE_CONTENT,"3",view_title_content_setup(" ", " "));
+    activity_door_unlock=activity_create(VIEW_TITLE_CONTENT,"2",view_title_content_setup("", ""));
+    activity_run(activity_create(VIEW_TITLE_CONTENT,"1",view_title_content_setup("Hi there", "This door lock support FG print, password. bla bla bla long str")));
 
     //run hardware func
     xTaskCreate(door_lock_task, "tsk_doorLock", 4096, NULL, 10, NULL);
