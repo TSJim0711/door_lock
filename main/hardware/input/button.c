@@ -1,5 +1,5 @@
 #include <uni_input.h>
-#include "fg_reader.h"
+#include "app.h"
 
 static void IRAM_ATTR btn_gpio_isr_handler(void* arg) {//switch fingprint reader to do
     if(g_fg_next_state==FG_STATE_IDLE||g_fg_next_state==FG_SEARCH_N_SIGNIN)

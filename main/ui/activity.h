@@ -1,5 +1,9 @@
+#ifndef ACTIVITY_H
+#define ACTIVITY_H
+
 #include "view.h"
 #define ACTIVITY_STACK_DEPTH_MAX 24
+
 //activity node
 typedef struct activity_t
 {
@@ -24,3 +28,5 @@ void activity_run(activity_t* to_run);
 void activity_screen_refresh();
 void activity_back();
 void activity_destroy(activity_t* to_destroy);
+
+#endif

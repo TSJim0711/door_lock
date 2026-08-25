@@ -12,13 +12,14 @@
 #include "fg_reader.h"
 #include "uni_input.h"
 #include "activity.h"
+#include "app.h"
 
 #define GPIO_LED_RED   GPIO_NUM_21
 #define GPIO_LED_GREEN GPIO_NUM_20
 
 static void IRAM_ATTR fg_on_touch_handler(void* arg) //someone puts there finger on sensor
 {
-    ESP_EARLY_LOGI("FG", "SX TRIGGERED========================");
+    //ESP_EARLY_LOGI("FG", "SX TRIGGERED========================");
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     //send a ticket through signal
     xSemaphoreGiveFromISR(g_fg_pressed_sem, &xHigherPriorityTaskWoken);//priority check
@@ -28,7 +29,6 @@ static void IRAM_ATTR fg_on_touch_handler(void* arg) //someone puts there finger
 }
 
 SemaphoreHandle_t g_dr_unlock_sem = NULL;
-activity_t* activity_door_unlock;
 void door_lock_task(void *pvParameters) {
     int countdown_cnt = 0;
     
@@ -50,11 +50,7 @@ void door_lock_task(void *pvParameters) {
             gpio_set_level(GPIO_LED_GREEN, 1);
             gpio_set_level(GPIO_LED_RED, 0);
             //load activity
-            activity_run(activity_door_unlock);
-            strncpy(((view_title_content_t*)(activity_stack_peek()->view_structure))->tc_title,"门已开锁!",32);
-            sprintf(print_buff,"Welcome id:%d",fg_identified_fetch_id());
-            strncpy(((view_title_content_t*)(activity_stack_peek()->view_structure))->tc_content,print_buff,64);
-            activity_screen_refresh();
+            msg_sent_to_ui(DOOR_LOCK,(&(doorlock_event_t){DOOR_UNLOCK,0}),sizeof(doorlock_event_t));
             countdown_cnt = 200; // 200 * 50ms = 10s countdown
         }
 
@@ -63,11 +59,7 @@ void door_lock_task(void *pvParameters) {
         if(countdown_cnt%20==0)//20*50ms =1s, print countdown per sec
         {
             printf("%ds left...\n", countdown_cnt/20);
-
-            oled_draw_rect(10,5,106,29,0,0);
-            sprintf(print_buff,"%ds left",countdown_cnt/20);
-            strncpy(((view_title_content_t*)(activity_stack_peek()->view_structure))->tc_content,print_buff,64);
-            activity_screen_refresh();
+            msg_sent_to_ui(DOOR_LOCK,(&(doorlock_event_t){DOOR_UNLOCKED,countdown_cnt/20}),sizeof(doorlock_event_t));
         }
 
         //time running, green led flash
@@ -189,12 +181,10 @@ void app_main(void)
     keypad_init();
     btn_init();
 
-    //prepare ui
-    g_activity_fg_reader=activity_create(VIEW_TITLE_CONTENT,"3",view_title_content_setup(" ", " "));
-    activity_door_unlock=activity_create(VIEW_TITLE_CONTENT,"2",view_title_content_setup("", ""));
-    activity_run(activity_create(VIEW_TITLE_CONTENT,"1",view_title_content_setup("Hi there", "This door lock support FG print, password. bla bla bla long str")));
+    app_init();
 
     //run hardware func
     xTaskCreate(door_lock_task, "tsk_doorLock", 4096, NULL, 10, NULL);
     xTaskCreate(fg_service, "tsk_fg_reader_service", 4096, NULL, 10, NULL);
+    xTaskCreate(ui_event_handler, "tsk_ui", 4096, NULL, 10, NULL);
 }

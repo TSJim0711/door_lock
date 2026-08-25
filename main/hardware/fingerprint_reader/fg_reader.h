@@ -35,12 +35,8 @@
 #define   FG_MAX		29		// 使用指纹模板最大数
 #define   FG_GETIMG_CNT   	2 		// 自动注册待指次数，只能设置为2或3
 #define   FG_GETIMG_DLY   	0x80 		// 采样间隔，高四位有效，0x00时无间隔，0xF0间隔最大，可根据实际调整
-    
-enum fg_status_e{FG_STATE_IDLE,FG_STATE_ENROLL,FG_STATE_SEARCH,FG_SEARCH_N_SIGNIN,FG_DEL_ALL,FG_DEL_CUR};//待机，注册指纹，判定指纹，删除指纹,删除目前识别到的指纹
-volatile extern enum fg_status_e g_fg_next_state; //s_fg_state may be mutex lock in future, lets change that at very last time 
 
-//fg_reader ui
-extern activity_t* g_activity_fg_reader;
+volatile extern enum fg_status_e g_fg_next_state; //s_fg_state may be mutex lock in future, lets change that at very last time 
 
 //outer functions
 void fg_init(void);
