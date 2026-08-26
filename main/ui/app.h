@@ -8,7 +8,7 @@
 #define MSG_BUFF_MAX 24
 
 extern SemaphoreHandle_t g_app_event_sem;
-typedef enum hardware_e {FG,UI,DOOR_LOCK,INPT_BTN,INPT_KEYPAD}hardware_e;
+typedef enum hardware_e {FG,UI,DOOR_LOCK,INPT}hardware_e;
 
 typedef struct event_msg_t
 {
@@ -41,5 +41,12 @@ typedef struct fg_event_t
     fg_progress_e fg_job_progress;//hows it going
     uint8_t fg_job_detail;//hows it going
 }fg_event_t;
+
+//inputs
+typedef enum inpt_btn_e{INPT_BTN_ENTER=0x80,INPT_BTN_BACK,INPT_BTN_UP,INPT_BTN_DOWN,INPT_BTN_LEFT,INPT_BTN_RIGHT}inpt_btn_e;//larger than normal ascii
+typedef struct inpt_t
+{
+    char content;
+}inpt_event_t;
 
 #endif

@@ -168,9 +168,6 @@ void oled_draw_rect(uint8_t x1,uint8_t y1,uint8_t x2,uint8_t y2,uint8_t mode, ui
 				oled_draw_px(x,y,mode);
 		}
 	}
-
-	if(!is_wrapped)
-		oled_screen_update();
 }
 
 void oled_init(void)

@@ -7,7 +7,7 @@
 //view formats=========
 enum view_type_e{   
                         VIEW_TITLE_CONTENT,             //a place to display text.
-                        VIEW_TITLE_CONTENT_COUNTDOWN,   //Title and text, with countdown
+                        VIEW_INPT_PAGE,                 //with a input txt box 
                         VIEW_LIST,                      //a list for selection
                     };
 
@@ -31,11 +31,13 @@ typedef struct view_title_content_t
 view_title_content_t* view_title_content_setup (char* title, char* content);
 
 
-//VIEW_TITLE_CONTENT_COUNTDOWN
-typedef struct view_title_content_countdown_t
+//VIEW_INPT_TXT
+typedef struct view_input_page
 {
     widget_id_t* stated_widget[MAX_WIDGET_PER_VIEW];
-    char* tcc_title;
-    char* tcc_content;
-    uint16_t tcc_timer;
-}view_title_content_countdown_t;
+    char* ipg_title;
+    char* ipg_inpt_content;
+    widget_id_t* ipg_inpt_wdg_id;
+    char* ipg_tips;
+}view_input_page;
+view_input_page* view_input_page_setup (char* title, char* defualt_inpt, char* tips);

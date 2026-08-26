@@ -49,7 +49,6 @@ activity_t *activity_stack_pop()
 void activity_print(activity_t* activity_toload)
 {
     oled_screen_clear();
-    ESP_EARLY_LOGI("UI", "printing:%s",activity_toload->view_name);
     view_print_widget((view_widget_arr_only*)(activity_toload->view_structure));
     oled_screen_update();
 }

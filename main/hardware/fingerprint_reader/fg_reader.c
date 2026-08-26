@@ -286,13 +286,13 @@ uint8_t fg_enroll(uint16_t id)
                 xStartTime = xTaskGetTickCount();//reset timmer
                 if(s_uart_rx_buf[10]==0x03)//tell user retap sensor
                 {
-                    msg_sent_to_ui(FG,(&(fg_event_t){s_fg_state,FG_PROGESS_DONE_SUCC,s_uart_rx_buf[11]}),sizeof(fg_event_t));
+                    event_send_to(FG,(&(fg_event_t){s_fg_state,FG_PROGESS_DONE_SUCC,s_uart_rx_buf[11]}),sizeof(fg_event_t));
                     continue;
                 }
 
                 if(s_uart_rx_buf[10]==0x06 && s_uart_rx_buf[11]==0xf2)
                 {
-                    msg_sent_to_ui(FG,(&(fg_event_t){s_fg_state,FG_JOB_DONE_SUCC,0}),sizeof(fg_event_t));
+                    event_send_to(FG,(&(fg_event_t){s_fg_state,FG_JOB_DONE_SUCC,0}),sizeof(fg_event_t));
                     return true;
                 }
             }
@@ -302,17 +302,17 @@ uint8_t fg_enroll(uint16_t id)
                     printf("fail as storage full.\n");
                 else if(s_uart_rx_buf[9]==0x26)
                 {
-                    msg_sent_to_ui(FG,(&(fg_event_t){s_fg_state,FG_PROGESS_DONE_FAIL,(uint8_t)FG_FAIL_TIMEOUT}),sizeof(fg_event_t));
+                    event_send_to(FG,(&(fg_event_t){s_fg_state,FG_PROGESS_DONE_FAIL,(uint8_t)FG_FAIL_TIMEOUT}),sizeof(fg_event_t));
                     printf("fail as timeout.\n");
                 }
                 else if(s_uart_rx_buf[9]==0x27)
                 {
-                    msg_sent_to_ui(FG,(&(fg_event_t){s_fg_state,FG_PROGESS_DONE_FAIL,(uint8_t)FG_FAIL_TIMEOUT}),sizeof(fg_event_t));
+                    event_send_to(FG,(&(fg_event_t){s_fg_state,FG_PROGESS_DONE_FAIL,(uint8_t)FG_FAIL_TIMEOUT}),sizeof(fg_event_t));
                     printf("fail as this fingerprint exist in system\n");
                 }
                 else
                 {
-                    msg_sent_to_ui(FG,(&(fg_event_t){s_fg_state,FG_PROGESS_DONE_FAIL,0}),sizeof(fg_event_t));
+                    event_send_to(FG,(&(fg_event_t){s_fg_state,FG_PROGESS_DONE_FAIL,0}),sizeof(fg_event_t));
                     printf("fail.\n");
                 }
                 return false;
@@ -385,18 +385,18 @@ uint8_t fg_identify(void)
             else
             {
                 printf("Not confident FG, id:%d, score:%d\n",g_v_identified_id,identified_fg_id_score);
-                msg_sent_to_ui(FG,&((fg_event_t){s_fg_state,FG_JOB_DONE_FAIL,(uint8_t)FG_FAIL_HESITATE}),sizeof(fg_event_t));
+                event_send_to(FG,&((fg_event_t){s_fg_state,FG_JOB_DONE_FAIL,(uint8_t)FG_FAIL_HESITATE}),sizeof(fg_event_t));
             }
         }                 
         else if (s_uart_rx_buf[9] == 0x09)
         {
             printf("FG never Enroll.\n");
-            msg_sent_to_ui(FG,(&(fg_event_t){s_fg_state,FG_JOB_DONE_FAIL,(uint8_t)FG_FAIL_NOT_FOUND}),sizeof(fg_event_t));
+            event_send_to(FG,(&(fg_event_t){s_fg_state,FG_JOB_DONE_FAIL,(uint8_t)FG_FAIL_NOT_FOUND}),sizeof(fg_event_t));
         }
         else
         {
             printf("Search failed.\n");
-            msg_sent_to_ui(FG,(&(fg_event_t){s_fg_state,FG_JOB_DONE_FAIL,0}),sizeof(fg_event_t));
+            event_send_to(FG,(&(fg_event_t){s_fg_state,FG_JOB_DONE_FAIL,0}),sizeof(fg_event_t));
         }        
         return false;
     };
@@ -427,12 +427,12 @@ uint8_t fg_del_allfg(void)
     {   
         if(s_uart_rx_buf[9]==0x00)
         {
-            msg_sent_to_ui(FG,(&(fg_event_t){s_fg_state,FG_JOB_DONE_SUCC,0}),sizeof(fg_event_t));
+            event_send_to(FG,(&(fg_event_t){s_fg_state,FG_JOB_DONE_SUCC,0}),sizeof(fg_event_t));
             printf("Succ clear all fg.\n");
             return true;
         }
     }
-    msg_sent_to_ui(FG,(&(fg_event_t){s_fg_state,FG_JOB_DONE_FAIL,0}),sizeof(fg_event_t));
+    event_send_to(FG,(&(fg_event_t){s_fg_state,FG_JOB_DONE_FAIL,0}),sizeof(fg_event_t));
     return false;
 }
 //=============================================================//
@@ -452,7 +452,7 @@ void fg_service (void *pvParameters)
             fg_wake();
             if(s_fg_state==FG_STATE_IDLE || s_fg_state==FG_STATE_SEARCH||s_fg_state==FG_SEARCH_N_SIGNIN)
             {
-                msg_sent_to_ui(FG,(&(fg_event_t){s_fg_state,FG_JOB_START,0}),sizeof(fg_event_t));
+                event_send_to(FG,(&(fg_event_t){s_fg_state,FG_JOB_START,0}),sizeof(fg_event_t));
                 status=fg_identify();
                 if(s_fg_state==FG_SEARCH_N_SIGNIN  && status==true)//did match
                 {
@@ -468,12 +468,12 @@ void fg_service (void *pvParameters)
             }
             else if(s_fg_state==FG_STATE_ENROLL)//registrate a finger print
             {
-                msg_sent_to_ui(FG,(&(fg_event_t){s_fg_state,FG_JOB_START,0}),sizeof(fg_event_t));
+                event_send_to(FG,(&(fg_event_t){s_fg_state,FG_JOB_START,0}),sizeof(fg_event_t));
                 fg_enroll(1);//id 1
             }
             else if(s_fg_state==FG_DEL_ALL)
             {
-                msg_sent_to_ui(FG,(&(fg_event_t){s_fg_state,FG_JOB_START,0}),sizeof(fg_event_t));
+                event_send_to(FG,(&(fg_event_t){s_fg_state,FG_JOB_START,0}),sizeof(fg_event_t));
                 fg_del_allfg();
             }
             fg_sleep();

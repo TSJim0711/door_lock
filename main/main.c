@@ -36,8 +36,6 @@ void door_lock_task(void *pvParameters) {
     gpio_set_level(GPIO_LED_GREEN, 0);
     gpio_set_level(GPIO_LED_RED, 1);
 
-    char print_buff[64];
-
     while (1) {
         //if in countdown then wait 50ms, else wait till die
         TickType_t xTicksToWait = (countdown_cnt > 0) ? pdMS_TO_TICKS(50) : portMAX_DELAY;
@@ -50,7 +48,7 @@ void door_lock_task(void *pvParameters) {
             gpio_set_level(GPIO_LED_GREEN, 1);
             gpio_set_level(GPIO_LED_RED, 0);
             //load activity
-            msg_sent_to_ui(DOOR_LOCK,(&(doorlock_event_t){DOOR_UNLOCK,0}),sizeof(doorlock_event_t));
+            event_send_to(DOOR_LOCK,(&(doorlock_event_t){DOOR_UNLOCK,0}),sizeof(doorlock_event_t));
             countdown_cnt = 200; // 200 * 50ms = 10s countdown
         }
 
@@ -59,7 +57,7 @@ void door_lock_task(void *pvParameters) {
         if(countdown_cnt%20==0)//20*50ms =1s, print countdown per sec
         {
             printf("%ds left...\n", countdown_cnt/20);
-            msg_sent_to_ui(DOOR_LOCK,(&(doorlock_event_t){DOOR_UNLOCKED,countdown_cnt/20}),sizeof(doorlock_event_t));
+            event_send_to(DOOR_LOCK,(&(doorlock_event_t){DOOR_UNLOCKED,countdown_cnt/20}),sizeof(doorlock_event_t));
         }
 
         //time running, green led flash
@@ -79,75 +77,6 @@ void door_lock_task(void *pvParameters) {
             activity_back();
         }
     }
-}
-
-SemaphoreHandle_t g_input_psw_sem =NULL;
-void psw_interface(void *pvParameters)
-{
-    char psw_buff[7],disp_buff[32];
-    char* psw_buff_ptr=&psw_buff[0];
-    for(int short i=0; i<6;i++)
-        psw_buff[i]='x';
-    short countdown_cnt=0; 
-    while(1)
-    {
-        TickType_t heartbeat_tick = (countdown_cnt!=0) ? pdMS_TO_TICKS(1000) : portMAX_DELAY;//1sec per update
-        if(xSemaphoreTake(g_input_psw_sem, heartbeat_tick) == pdTRUE)
-        {
-            countdown_cnt=11;//10 sec timeout, any input will refresh
-            if(psw_buff_ptr==&psw_buff[0])
-            {
-                //switch to psw input interface
-                oled_screen_clear();
-                //oled_print_str(10,2,"Key in",24,1,0);
-            }
-            *psw_buff_ptr=input_buff_pop();//pop an input from buff
-            psw_buff_ptr++;
-            sprintf(disp_buff,"[%-3.3s:%-3.3s]",psw_buff,psw_buff+3);//disp cur psw buff
-            //oled_print_str(10,28,disp_buff,16,0,0);
-            if(psw_buff_ptr==&psw_buff[6])//if get 6 char, determine if valid password
-            {
-                if(strcmp(psw_buff,"123456")==0)
-                {//correct pasword, unlock door
-                    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-                    //send a ticket through signal
-                    xSemaphoreGiveFromISR(g_dr_unlock_sem, &xHigherPriorityTaskWoken);//priority check
-                    if (xHigherPriorityTaskWoken) {//if tsk_doorLock is highest priority then run now
-                        portYIELD_FROM_ISR();
-                    }
-                    countdown_cnt=0;
-                }
-                else
-                {
-                    oled_screen_clear();
-                    //oled_print_str(10,2,"Psw Err",24,1,0);
-                    //oled_print_str(10,28,"U've entered.",16,1,0);
-                    //oled_print_str(10,46,"wrong password.",16,1,0);
-                    countdown_cnt=1;//reset screen after 1sec
-                }
-                psw_buff_ptr=&psw_buff[0];//clear psw buff
-                for(int short i=0; i<6;i++)
-                    psw_buff[i]='x';
-                continue;
-            }
-        }
-        countdown_cnt--;
-        if(countdown_cnt==0)//timeout, reset screen
-        {
-            psw_buff_ptr=&psw_buff[0];//clear psw buff
-            for(int short i=0; i<6;i++)
-                psw_buff[i]='x';
-            oled_screen_clear();
-            //oled_print_str(10,5,"门已上锁",24,1,0);
-            //oled_print_str(10,30,"Door Locked",16,1,0);
-        }
-        else
-        {
-            sprintf(disp_buff,"%.2d sec left.",countdown_cnt);
-            //oled_print_str(10,46,disp_buff,16,1,0);
-        }
-
-    }    
 }
 
 void app_main(void) 
