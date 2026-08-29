@@ -24,7 +24,7 @@ void keypad_input_handler(void *pvParameters)
                     if(gpio_get_level(row_gpio[row]))//read input with 1 output
                     {
                         ESP_LOGI("KP","Pressed:%c",keypad_map[row][col]);
-                        event_publish(INPT,&(inpt_event_t){keypad_map[row][col]},sizeof(inpt_event_t));
+                        event_publish(HW_INPT,SERV_UI,&(inpt_event_t){keypad_map[row][col]},sizeof(inpt_event_t));
                         pressing_row=row;
                     }
             }

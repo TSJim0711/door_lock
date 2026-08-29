@@ -69,6 +69,7 @@ activity_t* activity_create(enum view_type_e view_type,char* view_name, void* vi
 
 void activity_run(activity_t* to_run)
 {
+    ESP_LOGI("UI","Activity start:%s",to_run->view_name);
     activity_stack_push(to_run);
     activity_print(to_run);
 }
@@ -80,7 +81,8 @@ void activity_screen_refresh()//update screen content after changed
 
 void activity_back()//back to last activity, remove cur activity and re-load last activity
 {
-    activity_stack_pop();
+    ESP_LOGI("UI","Activity back:%s",activity_stack_pop()->view_name);
+    //activity_stack_pop();
     oled_screen_clear();
     activity_print(activity_stack_peek());
 }

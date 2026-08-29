@@ -1,28 +1,32 @@
 #ifndef APP_H
 #define APP_H
 
+#include <stdarg.h>
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "fg_reader.h"
 
-#define MSG_BUFF_MAX 24
-
+#define MSG_BUFF_SIZE 24
+extern QueueHandle_t queue_system;
+extern QueueHandle_t queue_doorlock;
 extern SemaphoreHandle_t g_app_event_sem;
-typedef enum hardware_e {FG,UI,DOOR_LOCK,INPT}hardware_e;
+typedef enum component_e {HW_FG,SERV_UI,HW_DOOR_LOCK,HW_INPT,SERV_SYS,SERV_AUTH,SERV_INVOKE}component_e;
 
 typedef struct event_msg_t
 {
     uint8_t sender;//to know whos sending so how to handle of msg content
+    uint8_t recver;
     void* msg_content;
 }event_msg_t;
 
 void app_init(void);
-bool msg_sent_to_ui(hardware_e sender, void* msg_content,uint8_t content_size);
+bool event_publish(component_e sender, component_e recver, void* msg_content,uint8_t content_size);
 void ui_event_handler(void *pvParameters);
 
 //hardware stuff
 //door lock
-typedef enum lock_state{DOOR_RELOCK, DOOR_UNLOCK, DOOR_UNLOCKED}lock_state;
+typedef enum lock_state{DOOR_RELOCK, DOOR_UNLOCKED, DOOR_UNLOCK}lock_state;
 typedef struct doorlock_event_t
 {
     lock_state lock_status;
@@ -48,5 +52,31 @@ typedef struct inpt_t
 {
     char content;
 }inpt_event_t;
+
+//sys serv
+//psw auth
+typedef struct auth_event_t
+{
+    uint16_t id;
+    bool trusted;//id auth and comfirmed by other hardware, eg. fg_reader
+    char key_code[16];
+    uint8_t relock_cnt_down;
+}auth_event_t;
+//tells ui next door unlock id is, 
+typedef struct auth_result_event_t
+{
+    bool trusted;
+    uint16_t id;
+}auth_result_event_t;
+typedef struct invoke_event_t
+{
+    TickType_t run_when;
+    void (*func_arg0)();
+    void (*func_arg1)(void* arg1);
+    void (*func_arg2)(void* arg1,void* arg2);
+    void* arg1;
+    void* arg2;
+}invoke_event_t;
+void system_service(void *pvParameters);
 
 #endif
