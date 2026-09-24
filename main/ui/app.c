@@ -21,6 +21,15 @@ activity_t* activity_psw_inpt;
 activity_t* activity_home;
 activity_t* activity_popup;
 
+typedef struct invoke_event_t
+{
+    TickType_t req_when;
+    TickType_t func_call_delay;
+    void (*func_call)(void* arg1,void* arg2,void* arg3,void* arg4);
+    void* arg[4];
+    uint8_t arg_cnt;
+}invoke_event_t;
+
 void system_service(void *pvParameters);
 void app_init(void)
 {
@@ -109,7 +118,7 @@ void ui_event_handler(void *pvParameters)
                         {
                             strncpy(((view_title_content_t*)(activity_fg_reader->view_structure))->tc_content,"Done. Thank you.",64);
                             activity_screen_refresh();
-                            event_publish(SERV_UI,SERV_INVOKE,&(invoke_event_t){xTaskGetTickCount()+pdMS_TO_TICKS(1000),&activity_back,NULL,NULL,NULL,NULL},sizeof(invoke_event_t));//close 1s later
+                            invoke(1000,&activity_back,0);//close 1s later
                         }
                         else if(fg_event_content->fg_job_progress==FG_PROGESS_DONE_FAIL)
                         {
@@ -120,7 +129,7 @@ void ui_event_handler(void *pvParameters)
                             else
                                 strncpy(((view_title_content_t*)(activity_fg_reader->view_structure))->tc_content,"Fail, Pls check log.",64);
                             activity_screen_refresh();
-                            event_publish(SERV_UI,SERV_INVOKE,&(invoke_event_t){xTaskGetTickCount()+pdMS_TO_TICKS(2000),&activity_back,NULL,NULL,NULL,NULL},sizeof(invoke_event_t));//close 1s later
+                            invoke(2000,&activity_back,0);
                         }
                         break;
                     case FG_SEARCH_N_SIGNIN:
@@ -143,7 +152,7 @@ void ui_event_handler(void *pvParameters)
                             else
                                 strncpy(((view_title_content_t*)(activity_fg_reader->view_structure))->tc_content,"Some error occurs.",64);
                             activity_screen_refresh();
-                            event_publish(SERV_UI,SERV_INVOKE,&(invoke_event_t){xTaskGetTickCount()+pdMS_TO_TICKS(1000),&activity_back,NULL,NULL,NULL,NULL},sizeof(invoke_event_t));//close 1s later
+                            invoke(1000,&activity_back,0);
                         }
                         break;
                     case FG_DEL_ALL:
@@ -156,13 +165,12 @@ void ui_event_handler(void *pvParameters)
                         else if (fg_event_content->fg_job_progress==FG_JOB_DONE_SUCC) {
                             strncpy(((view_title_content_t*)(activity_fg_reader->view_structure))->tc_title,"Delete Success",64);
                             activity_screen_refresh();
-                            event_publish(SERV_UI,SERV_INVOKE,&(invoke_event_t){xTaskGetTickCount()+pdMS_TO_TICKS(1000),&activity_back,NULL,NULL,NULL,NULL},sizeof(invoke_event_t));//close 1s later
+                            invoke(1000,&activity_back,0);
                         }
                         else if (fg_event_content->fg_job_progress==FG_JOB_DONE_FAIL) {
                             strncpy(((view_title_content_t*)(activity_fg_reader->view_structure))->tc_title,"Delete Failed",64);
                             activity_screen_refresh();
-                            event_publish(SERV_UI,SERV_INVOKE,&(invoke_event_t){xTaskGetTickCount()+pdMS_TO_TICKS(1000),&activity_back,NULL,NULL,NULL,NULL},sizeof(invoke_event_t));//close 1s later
-
+                            invoke(1000,&activity_back,0);
                         }
                         break;
                     default:
@@ -176,7 +184,7 @@ void ui_event_handler(void *pvParameters)
                     ((view_input_page*)(activity_psw_inpt->view_structure))->ipg_inpt_content[0]='\0';
                     activity_run(activity_psw_inpt);
                 }
-                if(inpt_event_content->content=='#')
+                if(inpt_event_content->content=='#' && activity_stack_peek()==activity_psw_inpt)
                 {
                     activity_back();
                     auth_event_t auth_event={.trusted=false};//not trusted password, need auth service determine
@@ -204,7 +212,7 @@ void ui_event_handler(void *pvParameters)
                     strncpy(((view_title_content_t*)(activity_popup->view_structure))->tc_title,"Ops!",32);
                     strncpy(((view_title_content_t*)(activity_popup->view_structure))->tc_content,"You got an wrong password.",64);
                     activity_run(activity_popup);
-                    event_publish(SERV_UI,SERV_INVOKE,&(invoke_event_t){xTaskGetTickCount()+pdMS_TO_TICKS(1000),&activity_back,NULL,NULL,NULL,NULL},sizeof(invoke_event_t));//close 1s later
+                    invoke(1000,&activity_back,0);
                 }
                 break;
             default:
@@ -215,21 +223,26 @@ void ui_event_handler(void *pvParameters)
     }
 }
 
-invoke_event_t to_do_list[16];
+static invoke_event_t to_do_list[16];
+static SemaphoreHandle_t x_todo_list_mutex=NULL;
+static TickType_t s_awake_cntdwn=portMAX_DELAY;
 void system_service(void *pvParameters)
 {
     event_msg_t msg_recv;
     auth_event_t* auth_event;
-    TickType_t cur_time;
     for(uint8_t i=0;i<16;i++)//init arr
-        to_do_list[i].run_when=portMAX_DELAY;
+        to_do_list[i].func_call_delay=portMAX_DELAY;
+    x_todo_list_mutex=xSemaphoreCreateMutex();
+    TickType_t cur_time;
     while(1)
     {
-    if(xQueueReceive(queue_system, &msg_recv, pdMS_TO_TICKS(100)))
+        cur_time=xTaskGetTickCount();
+        //ESP_LOGI("SYS","sys wake delay:%u,s_awake_cntdwn:%u,cur_time:%u",s_awake_cntdwn-cur_time,s_awake_cntdwn,cur_time);
+        if(xQueueReceive(queue_system, &msg_recv, MAX(s_awake_cntdwn,cur_time)-cur_time))
         {
             if(msg_recv.recver==SERV_AUTH)
             {
-                ESP_LOGI("SYS","CPA1");
+                //ESP_LOGI("SYS","CPA1");
                 auth_event=(auth_event_t*)msg_recv.msg_content;
                 if(auth_event->trusted)
                 {
@@ -244,35 +257,90 @@ void system_service(void *pvParameters)
                 {
                     event_publish(SERV_AUTH, SERV_UI, &(auth_result_event_t){false,0}, sizeof(auth_result_event_t));//notify psw err
                 }
-            } else if(msg_recv.recver==SERV_INVOKE)//run a func later， something like invoke() in Unity engine
+            }
+            free(msg_recv.msg_content);
+        }else //handle invoke
+        {
+            cur_time=xTaskGetTickCount();
+            //ESP_LOGI("SYS","CPC1");
+            if(!xSemaphoreTake(x_todo_list_mutex,100))
             {
-                for(uint8_t i=0; i<16; i++)//put to do to empty list
+                ESP_LOGI("SYS","Invoke op delayed, taking invoke list mutex failed.");
+                s_awake_cntdwn=cur_time+200;//try later if cannot take lock
+                continue;
+            }
+            s_awake_cntdwn=portMAX_DELAY;
+            for(uint8_t i=0; i<INVOKE_SLOT_SIZE; i++)
+            {
+                if(to_do_list[i].func_call_delay!=portMAX_DELAY)
                 {
-                    if(to_do_list[i].run_when==portMAX_DELAY)//occupy a space
+                    if(cur_time-to_do_list[i].req_when<=to_do_list[i].func_call_delay)//when is time
                     {
-                        to_do_list[i]=*(invoke_event_t*)(msg_recv.msg_content);//copy to list
-                        break;
+                        if(to_do_list[i].arg_cnt==0)//run func
+                            to_do_list[i].func_call(NULL,NULL,NULL,NULL);
+                        else if(to_do_list[i].arg_cnt==1)
+                            to_do_list[i].func_call(to_do_list[i].arg[0],NULL,NULL,NULL);
+                        else if(to_do_list[i].arg_cnt==2)
+                            to_do_list[i].func_call(to_do_list[i].arg[0],to_do_list[i].arg[1],NULL,NULL);
+                        else if(to_do_list[i].arg_cnt==3)
+                            to_do_list[i].func_call(to_do_list[i].arg[0],to_do_list[i].arg[1],to_do_list[i].arg[2],NULL);
+                        else if(to_do_list[i].arg_cnt==4)
+                            to_do_list[i].func_call(to_do_list[i].arg[0],to_do_list[i].arg[1],to_do_list[i].arg[2],to_do_list[i].arg[3]);
+                        to_do_list[i].func_call_delay=portMAX_DELAY;//set as no task
+                    }else //not u now, find if is next earlist task for queue timeout
+                    {
+                        //ESP_LOGI("SYS","CPC3 i:%d",i);
+                        if(to_do_list[i].req_when+to_do_list[i].func_call_delay<s_awake_cntdwn)
+                            s_awake_cntdwn=to_do_list[i].req_when+to_do_list[i].func_call_delay-cur_time;
                     }
                 }
             }
-            free(msg_recv.msg_content);
-        }else //handle 
-        {
-            ESP_LOGI("SYS","CPC1");
-            cur_time=xTaskGetTickCount();
-            for(uint8_t i=0; i<16; i++)
-                if(to_do_list[i].run_when!=portMAX_DELAY && to_do_list[i].run_when<cur_time)//when is time
-                {
-                    ESP_LOGI("SYS","CPC2 i:%d",i);
-                    if(to_do_list[i].func_arg0!=NULL)//run func
-                        to_do_list[i].func_arg0();
-                    else if(to_do_list[i].func_arg1!=NULL)
-                        to_do_list[i].func_arg1(to_do_list[i].arg1);
-                    else if(to_do_list[i].func_arg2!=NULL)
-                        to_do_list[i].func_arg2(to_do_list[i].arg1,to_do_list[i].arg2);
-
-                    to_do_list[i].run_when=portMAX_DELAY;//set as no task
-                }
+            xSemaphoreGive(x_todo_list_mutex);
         }
     }
+}
+
+//run a func later，something like invoke() in Unity engine >_<!!!
+//check arg_count, can't catch this err when arg_count > arg sent
+bool invoke(TickType_t call_dalay_ms, void (*func_call)(), int arg_count ,...)
+{
+    if (arg_count>4)
+    {
+        ESP_LOGI("SYS","Invoke req dropped, too many arg, %d/4",arg_count);
+        return false;
+    }
+    
+    va_list args;
+    if(!xSemaphoreTake(x_todo_list_mutex, pdMS_TO_TICKS(100)))
+    {
+        ESP_LOGI("SYS","Invoke req ignored, taking invoke list mutex failed.");
+        return false;
+    }
+    for(uint8_t i=0; i<INVOKE_SLOT_SIZE; i++)//put to do to empty list
+    {
+        if(to_do_list[i].func_call_delay==portMAX_DELAY)//occupy a space
+        {
+            to_do_list[i].arg_cnt=arg_count;//state func arg count
+            to_do_list[i].req_when=xTaskGetTickCount();
+            to_do_list[i].func_call_delay=pdMS_TO_TICKS(call_dalay_ms);
+            if(to_do_list[i].func_call_delay<s_awake_cntdwn)//earlist func to call set as delay
+            {
+                s_awake_cntdwn=xTaskGetTickCount()+to_do_list[i].func_call_delay;
+                ESP_LOGI("SYS","Invoke when:%u",s_awake_cntdwn);
+                xQueueSend(queue_system,(&(event_msg_t){SERV_INVOKE,SERV_SYS,NULL}),pdMS_TO_TICKS(100));//send a dummy, refresh system_service queue timeout
+            }
+            to_do_list[i].func_call=(void(*)(void*,void*,void*,void*))func_call;
+
+            va_start(args, arg_count);
+            for(uint16_t arg_idx=0; arg_idx<arg_count; arg_idx++)//load arg
+            {
+                to_do_list[i].arg[arg_idx]=va_arg(args,void*);
+            }
+            va_end(args);
+            
+            xSemaphoreGive(x_todo_list_mutex);
+            break;
+        }
+    }
+    return true;
 }

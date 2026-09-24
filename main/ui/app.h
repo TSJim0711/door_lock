@@ -8,6 +8,7 @@
 #include "fg_reader.h"
 
 #define MSG_BUFF_SIZE 24
+#define INVOKE_SLOT_SIZE 16
 extern QueueHandle_t queue_system;
 extern QueueHandle_t queue_doorlock;
 extern SemaphoreHandle_t g_app_event_sem;
@@ -68,15 +69,8 @@ typedef struct auth_result_event_t
     bool trusted;
     uint16_t id;
 }auth_result_event_t;
-typedef struct invoke_event_t
-{
-    TickType_t run_when;
-    void (*func_arg0)();
-    void (*func_arg1)(void* arg1);
-    void (*func_arg2)(void* arg1,void* arg2);
-    void* arg1;
-    void* arg2;
-}invoke_event_t;
 void system_service(void *pvParameters);
+
+bool invoke(TickType_t call_dalay_ms, void (*func_call)(), int arg_count ,...);
 
 #endif
