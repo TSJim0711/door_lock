@@ -7,9 +7,11 @@ static const char keypad_map[4][3]={    {KEYPAD_1, KEYPAD_2, KEYPAD_3},
                                         {KEYPAD_STAR, KEYPAD_0, KEYPAD_DASH}};
 
 static SemaphoreHandle_t s_keypad_in_sem;
-void keypad_input_handler(void *pvParameters)
+void IRAM_ATTR keypad_input_handler(void *pvParameters)
 {
-    uint8_t pressing_row;
+    bool longpress_start_flag=false;
+    char last_inpt_char='\0';
+    TickType_t last_inpt_accp_time=0,last_inpt_time=0,cur_time;//input accept means sent inpt to sys
     while(1)
     {
         if(xSemaphoreTake(s_keypad_in_sem, portMAX_DELAY) == pdTRUE)  //spend a ticket then go (is binary)
@@ -20,21 +22,33 @@ void keypad_input_handler(void *pvParameters)
                 gpio_set_level(col_gpio[1], (col==1?1:0));
                 gpio_set_level(col_gpio[2], (col==2?1:0));
                 vTaskDelay(pdMS_TO_TICKS(5));//wait for above GPIO settled
+                cur_time=xTaskGetTickCount();
                 for(short row=0;row<4;row++)
                     if(gpio_get_level(row_gpio[row]))//read input with 1 output
                     {
-                        ESP_LOGI("KP","Pressed:%c",keypad_map[row][col]);
-                        event_publish(HW_INPT,SERV_UI,&(inpt_event_t){keypad_map[row][col]},sizeof(inpt_event_t));
-                        pressing_row=row;
+                        if(keypad_map[row][col]!=last_inpt_char||(((!longpress_start_flag||cur_time-last_inpt_accp_time>pdMS_TO_TICKS(FIRST_REPEAT_INPT_DELAYMS))&&cur_time-last_inpt_accp_time>pdMS_TO_TICKS(REPEAT_INPT_DELAYMS))||cur_time-last_inpt_time>=pdMS_TO_TICKS(50)))//sec accpt long press delay 600, then 150ms each accept, 2 same input >50ms gap treat as bouble press
+                        {
+                            ESP_LOGI("KP","Last inpt time:%u",last_inpt_time);
+                            last_inpt_accp_time=cur_time;//input been accept, record
+                            if(keypad_map[row][col]==last_inpt_char)//first press raise flag, vice versa
+                                if(cur_time-last_inpt_time>=pdMS_TO_TICKS(50))// 2 same input >40ms gap treat as bouble press
+                                    longpress_start_flag=true;
+                                else
+                                    longpress_start_flag=false;
+                            else
+                                longpress_start_flag=true;
+                            last_inpt_char=keypad_map[row][col];
+                            ESP_LOGI("KP","Pressed:%c",last_inpt_char);
+                            event_publish(HW_INPT,SERV_UI,&(inpt_event_t){last_inpt_char},sizeof(inpt_event_t));
+                        }
                     }
             }
             gpio_set_level(col_gpio[0], 1);
             gpio_set_level(col_gpio[1], 1);
             gpio_set_level(col_gpio[2], 1);
-            while (gpio_get_level(row_gpio[pressing_row])) {
-                vTaskDelay(pdMS_TO_TICKS(20)); //wait untill release, 抬起时有震荡
-            }
         }
+        last_inpt_time=xTaskGetTickCount();
+        vTaskDelay(pdMS_TO_TICKS(20));//别累着了
     }
 }
 
