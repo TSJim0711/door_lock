@@ -6,6 +6,8 @@
 #include "app.h"
 #include "fg_reader.h"
 #include "esp_log.h"
+#include "uni_input.h"
+#include "view.h"
 
 #define MAX(x,y) ((x>y)?x:y)
 
@@ -21,14 +23,9 @@ activity_t* activity_psw_inpt;
 activity_t* activity_home;
 activity_t* activity_popup;
 
-typedef struct invoke_event_t
-{
-    TickType_t req_when;
-    TickType_t func_call_delay;
-    void (*func_call)(void* arg1,void* arg2,void* arg3,void* arg4);
-    void* arg[4];
-    uint8_t arg_cnt;
-}invoke_event_t;
+activity_t* activity_manu;
+activity_t* activity_fg_mode_set;
+activity_t* activity_about;
 
 void system_service(void *pvParameters);
 void app_init(void)
@@ -43,7 +40,16 @@ void app_init(void)
     activity_psw_inpt=activity_create(VIEW_INPT_PAGE,"4",view_input_page_setup("Password:", "", "[#] to Confirm"));
     activity_home=activity_create(VIEW_TITLE_CONTENT,"1",view_title_content_setup("Hi there", "This door lock support FG print, password. bla bla bla long str"));
     activity_popup=activity_create(VIEW_TITLE_CONTENT,"5",view_title_content_setup("", ""));
-        
+    
+    activity_manu=activity_create(VIEW_LIST,"6",view_list_setup("Manu"));
+    activity_fg_mode_set=activity_create(VIEW_LIST,"7",view_list_setup("FG Mode Set"));
+    view_list_push_content(activity_manu->view_structure, "Manu", ACTION_LAUNCH, sizeof(action_launch_t), &(action_launch_t){activity_fg_mode_set});//addd activity_fg_mode_set to activity_manu list
+    view_list_push_content(activity_fg_mode_set->view_structure, "Scan",ACTION_I_SET,sizeof(action_i_set_t),&(action_i_set_t){(void*)&g_fg_next_state,FG_SEARCH_N_SIGNIN});
+    view_list_push_content(activity_fg_mode_set->view_structure, "Register",ACTION_I_SET,sizeof(action_i_set_t),&(action_i_set_t){(void*)&g_fg_next_state,FG_STATE_ENROLL});
+    view_list_push_content(activity_fg_mode_set->view_structure, "Delete",ACTION_I_SET,sizeof(action_i_set_t),&(action_i_set_t){(void*)&g_fg_next_state,FG_DEL_ALL});
+    activity_about=activity_create(VIEW_TITLE_CONTENT,"8",view_title_content_setup("This UI", "Rate: 5****\nRated by me."));
+    view_list_push_content(activity_manu->view_structure, "About Project", ACTION_LAUNCH, sizeof(action_launch_t), &(action_launch_t){activity_about});
+
     activity_run(activity_home);
 }
 
@@ -68,6 +74,7 @@ void ui_event_handler(void *pvParameters)
     event_msg_t msg_recv;
     uint16_t unlock_id=0;
     char print_buff[WIDGET_CONTENT_MAXSIZE];
+    enum view_type_e cur_activity_view;
     while(1)
     {
         if(xQueueReceive(queue_ui, &msg_recv, portMAX_DELAY))//wait for event
@@ -179,28 +186,74 @@ void ui_event_handler(void *pvParameters)
                 break;
             case HW_INPT:
                 inpt_event_t* inpt_event_content=(inpt_event_t*)msg_recv.msg_content;
-                if(activity_stack_peek()==activity_home)//only launch inpt page at home page
-                {
-                    ((view_input_page*)(activity_psw_inpt->view_structure))->ipg_inpt_content[0]='\0';
-                    activity_run(activity_psw_inpt);
-                }
-                if(inpt_event_content->content=='#' && activity_stack_peek()==activity_psw_inpt)
-                {
-                    activity_back();
-                    auth_event_t auth_event={.trusted=false};//not trusted password, need auth service determine
-                    strncpy(auth_event.key_code,((view_input_page*)(activity_psw_inpt->view_structure))->ipg_inpt_content,15);
-                    event_publish(SERV_UI,SERV_AUTH,&auth_event,sizeof(auth_event_t));
-                }else if(activity_stack_peek()==activity_psw_inpt && inpt_event_content->content>0x20 && inpt_event_content->content<0x80)//if under input page & is ascii char, then inpt
-                {
-                    for(uint8_t i=0;i<WIDGET_CONTENT_MAXSIZE-1;i++)
-                        if(((view_input_page*)(activity_psw_inpt->view_structure))->ipg_inpt_content[i]=='\0')//move to inpt buff str final
+                ESP_LOGI("UI","Recv inpt:%u",inpt_event_content->content);
+                if(inpt_event_content->content>=0x80)
+                {//control code
+                    
+                    if(activity_stack_peek()==activity_home)//launch setting screen on home screen
+                        if(inpt_event_content->content==INPT_BTN_ENTER)
                         {
-                            ((view_input_page*)(activity_psw_inpt->view_structure))->ipg_inpt_content[i]=inpt_event_content->content;
-                            ((view_input_page*)(activity_psw_inpt->view_structure))->ipg_inpt_content[i+1]='\0';
-                            break;
+                            activity_run(activity_manu);
+                            continue;
                         }
-                    wdg_lable_draw(((view_input_page*)activity_psw_inpt->view_structure)->ipg_inpt_wdg_id);//reprint inpt box only
-                    oled_screen_update();
+
+                    if(activity_stack_peek()->view_type==VIEW_LIST)//in list view
+                    {   
+                        if(inpt_event_content->content==INPT_BTN_UP)//select above obj and below obj
+                        {
+                            view_list_select_shift((view_list*)(activity_stack_peek()->view_structure), -1);
+                            activity_screen_refresh();
+                        }
+                        else if(inpt_event_content->content==INPT_BTN_DOWN)
+                        {
+                            view_list_select_shift((view_list*)(activity_stack_peek()->view_structure), 1);
+                            activity_screen_refresh();
+                        }
+                        else if(inpt_event_content->content==INPT_BTN_ENTER)
+                        {
+                            vl_content_t* action_head =((view_list*)(activity_stack_peek()->view_structure))->vl_content_select;
+                            switch(action_head->vlc_action_type)
+                            {
+                                case ACTION_LAUNCH://launch an activity
+                                    activity_run(((action_launch_t*)(action_head->vlc_action))->act_activity_launch);
+                                    break;
+                                case ACTION_I_SET://set a integer var val
+                                    *(uint32_t*)(((action_i_set_t*)(action_head->vlc_action))->act_targ_var)=((action_i_set_t*)(action_head->vlc_action))->act_var_val;
+                                    break;
+                                case ACTION_PTR_SET:
+                                    (((action_ptr_set_t*)(action_head->vlc_action))->act_targ_var)=((action_ptr_set_t*)(action_head->vlc_action))->act_var_val;
+                                    break;
+                            }
+                        }
+                    }
+                    if(inpt_event_content->content==INPT_BTN_RETURN)
+                        activity_back();
+                }else
+                {//normal char
+                    if(activity_stack_peek()==activity_home)//only launch inpt page at home page
+                    {
+                        ((view_input_page*)(activity_psw_inpt->view_structure))->ipg_inpt_content[0]='\0';
+                        ESP_LOGI("UI","Launch psw");
+                        activity_run(activity_psw_inpt);
+                    }
+                    if(inpt_event_content->content=='#' && activity_stack_peek()==activity_psw_inpt)
+                    {
+                        activity_back();
+                        auth_event_t auth_event={.trusted=false};//not trusted password, need auth service determine
+                        strncpy(auth_event.key_code,((view_input_page*)(activity_psw_inpt->view_structure))->ipg_inpt_content,15);
+                        event_publish(SERV_UI,SERV_AUTH,&auth_event,sizeof(auth_event_t));
+                    }else if(activity_stack_peek()==activity_psw_inpt && inpt_event_content->content>0x20 && inpt_event_content->content<0x80)//if under input page & is ascii char, then inpt
+                    {
+                        for(uint8_t i=0;i<WIDGET_CONTENT_MAXSIZE-1;i++)
+                            if(((view_input_page*)(activity_psw_inpt->view_structure))->ipg_inpt_content[i]=='\0')//move to inpt buff str final
+                            {
+                                ((view_input_page*)(activity_psw_inpt->view_structure))->ipg_inpt_content[i]=inpt_event_content->content;
+                                ((view_input_page*)(activity_psw_inpt->view_structure))->ipg_inpt_content[i+1]='\0';
+                                break;
+                            }
+                        wdg_lable_draw(((view_input_page*)activity_psw_inpt->view_structure)->ipg_inpt_wdg_id);//reprint inpt box only
+                        oled_screen_update();
+                    }
                 }
                 break;
             case SERV_AUTH:
@@ -223,6 +276,14 @@ void ui_event_handler(void *pvParameters)
     }
 }
 
+typedef struct invoke_event_t
+{
+    TickType_t req_when;
+    TickType_t func_call_delay;
+    void (*func_call)(void* arg1,void* arg2,void* arg3,void* arg4);
+    void* arg[4];
+    uint8_t arg_cnt;
+}invoke_event_t;
 static invoke_event_t to_do_list[16];
 static SemaphoreHandle_t x_todo_list_mutex=NULL;
 static TickType_t s_awake_cntdwn=portMAX_DELAY;

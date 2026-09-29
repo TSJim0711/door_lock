@@ -108,7 +108,7 @@ void oled_draw_px(uint8_t x,uint8_t y,bool inv_clr)
 //x1,y1:起点坐标
 //x2,y2:结束坐标
 //t:1 填充 0,清空
-void oled_draw_line(uint8_t x1,uint8_t y1,uint8_t x2,uint8_t y2,uint8_t mode, uint8_t is_wrapped)
+void oled_draw_line(uint8_t x1,uint8_t y1,uint8_t x2,uint8_t y2,uint8_t mode)
 {
 	short t; 
 	int xerr=0,yerr=0,delta_x,delta_y,distance;
@@ -141,9 +141,6 @@ void oled_draw_line(uint8_t x1,uint8_t y1,uint8_t x2,uint8_t y2,uint8_t mode, ui
 			uCol+=incy;
 		}
 	}
-
-	if(!is_wrapped)
-		oled_screen_update();
 }
 
 //画四边形

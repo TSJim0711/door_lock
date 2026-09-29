@@ -5,6 +5,8 @@ static const char keypad_map[4][3]={    {KEYPAD_1, KEYPAD_2, KEYPAD_3},
                                         {KEYPAD_4, KEYPAD_5, KEYPAD_6},
                                         {KEYPAD_7, KEYPAD_8, KEYPAD_9},
                                         {KEYPAD_STAR, KEYPAD_0, KEYPAD_DASH}};
+static const gpio_num_t row_gpio[4]={GPIO_NUM_10,GPIO_NUM_9,GPIO_NUM_46,GPIO_NUM_3};
+static const gpio_num_t col_gpio[3]={GPIO_NUM_8,GPIO_NUM_18,GPIO_NUM_17};
 
 static SemaphoreHandle_t s_keypad_in_sem;
 void IRAM_ATTR keypad_input_handler(void *pvParameters)

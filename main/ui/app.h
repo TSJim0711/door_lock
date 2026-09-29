@@ -48,10 +48,10 @@ typedef struct fg_event_t
 }fg_event_t;
 
 //inputs
-typedef enum inpt_btn_e{INPT_BTN_ENTER=0x80,INPT_BTN_BACK,INPT_BTN_UP,INPT_BTN_DOWN,INPT_BTN_LEFT,INPT_BTN_RIGHT}inpt_btn_e;//larger than normal ascii
+typedef enum inpt_btn_e{INPT_BTN_ENTER=0x80,INPT_BTN_RETURN,INPT_BTN_UP,INPT_BTN_DOWN,INPT_BTN_LEFT,INPT_BTN_RIGHT}inpt_btn_e;//larger than normal ascii
 typedef struct inpt_t
 {
-    char content;
+    uint16_t content;
 }inpt_event_t;
 
 //sys serv
