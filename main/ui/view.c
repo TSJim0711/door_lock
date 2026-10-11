@@ -132,7 +132,7 @@ bool view_list_push_content(view_list* list_push_to,char* title, enum action_typ
     memcpy(action_lifetime, action, action_type_size);
     new_content->vlc_action=action_lifetime;
     char* title_lifetime=(char*)malloc(strlen(title)+1);//move title str to lifetime storage
-    strlcpy(title_lifetime, title, sizeof(title_lifetime));
+    strlcpy(title_lifetime, title, strlen(title)+1);//known clang(-Wstrlcpy-strlcat-size) err, but it malloc with strlen(title)+1
     new_content->vlc_title=title_lifetime;
     new_content->vlc_next_content=NULL;
     new_content->vlc_prev_content=list_push_to->vl_content_tail;//get list content chain tail as prev
@@ -141,6 +141,7 @@ bool view_list_push_content(view_list* list_push_to,char* title, enum action_typ
     else
         list_push_to->vl_content_tail->vlc_next_content=new_content;
     list_push_to->vl_content_tail=new_content;
+    ESP_LOGI("V_L","View list pushed:%s",new_content->vlc_title);
     view_list_widget_sycn(list_push_to);
     return true;
 }

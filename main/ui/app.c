@@ -26,10 +26,14 @@ activity_t* activity_popup;
 activity_t* activity_manu;
 activity_t* activity_fg_mode_set;
 activity_t* activity_about;
+activity_t* activity_psw_alter;
+
+static char s_pasw[16];
 
 void system_service(void *pvParameters);
 void app_init(void)
 {
+    strlcpy(s_pasw,"123456",24);//defualt pasw is 1234
     queue_ui=xQueueCreate(MSG_BUFF_SIZE, sizeof(event_msg_t));
     queue_system=xQueueCreate(MAX(MSG_BUFF_SIZE/4,1), sizeof(event_msg_t));
     queue_doorlock=xQueueCreate(MAX(MSG_BUFF_SIZE/4,1), sizeof(event_msg_t));
@@ -43,13 +47,15 @@ void app_init(void)
     
     activity_manu=activity_create(VIEW_LIST,"6",view_list_setup("Manu"));
     activity_fg_mode_set=activity_create(VIEW_LIST,"7",view_list_setup("FG Mode Set"));
-    view_list_push_content(activity_manu->view_structure, "Manu", ACTION_LAUNCH, sizeof(action_launch_t), &(action_launch_t){activity_fg_mode_set});//addd activity_fg_mode_set to activity_manu list
+    view_list_push_content(activity_manu->view_structure, "FG Mode", ACTION_LAUNCH, sizeof(action_launch_t), &(action_launch_t){activity_fg_mode_set});//addd activity_fg_mode_set to activity_manu list
     view_list_push_content(activity_fg_mode_set->view_structure, "Scan",ACTION_I_SET,sizeof(action_i_set_t),&(action_i_set_t){(void*)&g_fg_next_state,FG_SEARCH_N_SIGNIN});
     view_list_push_content(activity_fg_mode_set->view_structure, "Register",ACTION_I_SET,sizeof(action_i_set_t),&(action_i_set_t){(void*)&g_fg_next_state,FG_STATE_ENROLL});
     view_list_push_content(activity_fg_mode_set->view_structure, "Delete",ACTION_I_SET,sizeof(action_i_set_t),&(action_i_set_t){(void*)&g_fg_next_state,FG_DEL_ALL});
+    activity_psw_alter=activity_create(VIEW_INPT_PAGE,"9",view_input_page_setup("Old password:", "", "[#] to Confirm"));
+    view_list_push_content(activity_manu->view_structure, "Set password", ACTION_LAUNCH, sizeof(action_launch_t), &(action_launch_t){activity_psw_alter});
     activity_about=activity_create(VIEW_TITLE_CONTENT,"8",view_title_content_setup("This UI", "Rate: 5****\nRated by me."));
     view_list_push_content(activity_manu->view_structure, "About Project", ACTION_LAUNCH, sizeof(action_launch_t), &(action_launch_t){activity_about});
-
+    
     activity_run(activity_home);
 }
 
@@ -75,6 +81,7 @@ void ui_event_handler(void *pvParameters)
     uint16_t unlock_id=0;
     char print_buff[WIDGET_CONTENT_MAXSIZE];
     enum view_type_e cur_activity_view;
+    bool admin_flag=false;//to state if user can do sensative stuff
     while(1)
     {
         if(xQueueReceive(queue_ui, &msg_recv, portMAX_DELAY))//wait for event
@@ -242,16 +249,71 @@ void ui_event_handler(void *pvParameters)
                         auth_event_t auth_event={.trusted=false};//not trusted password, need auth service determine
                         strncpy(auth_event.key_code,((view_input_page*)(activity_psw_inpt->view_structure))->ipg_inpt_content,15);
                         event_publish(SERV_UI,SERV_AUTH,&auth_event,sizeof(auth_event_t));
-                    }else if(activity_stack_peek()==activity_psw_inpt && inpt_event_content->content>0x20 && inpt_event_content->content<0x80)//if under input page & is ascii char, then inpt
+                    }else if (inpt_event_content->content=='#' && activity_stack_peek()==activity_psw_alter)//editing password
+                    {
+                        static char pasw_temp[16];
+                        if(admin_flag==false)//check if input old pasw
+                        {
+                            if(strncmp(((view_input_page*)(activity_psw_alter->view_structure))->ipg_inpt_content, s_pasw, 16)==0)//valid old pasw?
+                            {
+                                strlcpy(((view_input_page*)(activity_psw_alter->view_structure))->ipg_title,"New psw:",64);
+                                ((view_input_page*)(activity_psw_alter->view_structure))->ipg_inpt_content[0]='\0';//clear the inpt box
+                                pasw_temp[0]='\0';//prepare double check slot
+                                admin_flag=true;//grant permission
+                                activity_print(activity_psw_alter);
+                            }else//wrong old pasw
+                            {
+                                ((view_input_page*)(activity_psw_alter->view_structure))->ipg_inpt_content[0]='\0';
+                                activity_back();
+                                strncpy(((view_title_content_t*)(activity_popup->view_structure))->tc_title,"Ops!",32);
+                                strncpy(((view_title_content_t*)(activity_popup->view_structure))->tc_content,"You got an wrong password.",64);
+                                activity_run(activity_popup);
+                                invoke(1000,&activity_back,0);
+                            }
+                        }else 
+                        {
+                            if(pasw_temp[0]=='\0')//inpt new pasw now
+                            {
+                                strlcpy(pasw_temp,((view_input_page*)(activity_psw_alter->view_structure))->ipg_inpt_content,16);
+                                strlcpy(((view_input_page*)(activity_psw_alter->view_structure))->ipg_title,"Pls Repeat:",64);//request user type new pasw again to confirm
+                                ((view_input_page*)(activity_psw_alter->view_structure))->ipg_inpt_content[0]='\0';//clean the inpt box
+                                activity_print(activity_psw_alter);
+                            }else //double check new pasw
+                            {
+                                if(strncmp(((view_input_page*)(activity_psw_alter->view_structure))->ipg_inpt_content, pasw_temp,16)==0)
+                                {
+                                    strlcpy(s_pasw,((view_input_page*)(activity_psw_alter->view_structure))->ipg_inpt_content,16);//copy to true pasw str
+                                    ((view_input_page*)(activity_psw_alter->view_structure))->ipg_inpt_content[0]='\0';//clean the inpt box
+                                    admin_flag=false;//use admin permission
+                                    activity_back();
+                                    strlcpy(((view_input_page*)(activity_psw_alter->view_structure))->ipg_title,"Old password:",64);
+                                    strncpy(((view_title_content_t*)(activity_popup->view_structure))->tc_title,"Done!",32);
+                                    strncpy(((view_title_content_t*)(activity_popup->view_structure))->tc_content,"New Password had been set.",64);
+                                    activity_run(activity_popup);
+                                    invoke(1000,&activity_back,0);
+                                }else
+                                {
+                                    admin_flag=false;
+                                    ((view_input_page*)(activity_psw_alter->view_structure))->ipg_inpt_content[0]='\0';
+                                    activity_back();
+                                    strlcpy(((view_input_page*)(activity_psw_alter->view_structure))->ipg_title,"Old password:",64);
+                                    strncpy(((view_title_content_t*)(activity_popup->view_structure))->tc_title,"Alzheimer?",32);
+                                    strncpy(((view_title_content_t*)(activity_popup->view_structure))->tc_content,"Both pasw is not the same.",64);
+                                    activity_run(activity_popup);
+                                    invoke(2000,&activity_back,0);
+                                }
+                            }
+                        }                         
+                    }else if(activity_stack_peek()->view_type==VIEW_INPT_PAGE && inpt_event_content->content>0x20 && inpt_event_content->content<0x80)//if under input page & is ascii char, then inpt
                     {
                         for(uint8_t i=0;i<WIDGET_CONTENT_MAXSIZE-1;i++)
-                            if(((view_input_page*)(activity_psw_inpt->view_structure))->ipg_inpt_content[i]=='\0')//move to inpt buff str final
+                            if(((view_input_page*)(activity_stack_peek()->view_structure))->ipg_inpt_content[i]=='\0')//move to inpt buff str final
                             {
-                                ((view_input_page*)(activity_psw_inpt->view_structure))->ipg_inpt_content[i]=inpt_event_content->content;
-                                ((view_input_page*)(activity_psw_inpt->view_structure))->ipg_inpt_content[i+1]='\0';
+                                ((view_input_page*)(activity_stack_peek()->view_structure))->ipg_inpt_content[i]=inpt_event_content->content;
+                                ((view_input_page*)(activity_stack_peek()->view_structure))->ipg_inpt_content[i+1]='\0';
                                 break;
                             }
-                        wdg_lable_draw(((view_input_page*)activity_psw_inpt->view_structure)->ipg_inpt_wdg_id);//reprint inpt box only
+                        wdg_lable_draw(((view_input_page*)activity_stack_peek()->view_structure)->ipg_inpt_wdg_id);//reprint inpt box only
                         oled_screen_update();
                     }
                 }
@@ -309,7 +371,7 @@ void system_service(void *pvParameters)
                 {
                     event_publish(SERV_AUTH, SERV_UI, &(auth_result_event_t){true,auth_event->id}, sizeof(auth_result_event_t));
                     event_publish(SERV_AUTH, HW_DOOR_LOCK, &(doorlock_event_t){DOOR_UNLOCK,10}, sizeof(doorlock_event_t));//unlock door directly
-                }else if(strncmp(auth_event->key_code, "123456", 7)==0)
+                }else if(strcmp(auth_event->key_code, s_pasw)==0)
                 {
                     ESP_LOGI("SERV_AUTH","Psw ok");
                     event_publish(SERV_AUTH, SERV_UI, &(auth_result_event_t){true,0}, sizeof(auth_result_event_t));

@@ -25,6 +25,7 @@ activity_t *activity_stack_peek();
 //activity lifecycle
 activity_t* activity_create(enum view_type_e view_type,char* view_name, void* view_structure);
 void activity_run(activity_t* to_run);
+void activity_print(activity_t* activity_to_print);
 void activity_screen_refresh();
 void activity_back();
 void activity_destroy(activity_t* to_destroy);
