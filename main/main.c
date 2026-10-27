@@ -13,6 +13,7 @@
 #include "uni_input.h"
 #include "activity.h"
 #include "app.h"
+#include "flashdb.h"
 
 #define GPIO_LED_RED   GPIO_NUM_21
 #define GPIO_LED_GREEN GPIO_NUM_20
@@ -42,14 +43,14 @@ void door_lock_task(void *pvParameters)
     {
         if(xQueueReceive(queue_doorlock, &msg_recv, heart_beat_freq))
         {
-            if(((doorlock_event_t*)msg_recv.msg_content)->lock_status==DOOR_UNLOCK)
+            if(((auth_result_t*)msg_recv.msg_content)->pasw_valid==1)
             {
                 printf("Unlocked.\n");
                 gpio_set_level(GPIO_LED_GREEN, 1);
                 gpio_set_level(GPIO_LED_RED, 0);
                 
-                event_publish(HW_DOOR_LOCK,SERV_UI,(&(doorlock_event_t){DOOR_UNLOCK,0}),sizeof(doorlock_event_t));
-                countdown_cnt = ((doorlock_event_t*)msg_recv.msg_content)->detail;//set countdown sec as given 
+                event_publish(HW_DOOR_LOCK,SERV_UI,(&(doorlock_event_t){DOOR_UNLOCK,0}),doorlock_event_tt,sizeof(doorlock_event_t));
+                countdown_cnt = 10;//10sec to relock
                 heart_beat_freq=pdMS_TO_TICKS(1000);//enable heart beat per sec, for refresh countdown
                 free(msg_recv.msg_content);
             }
@@ -60,7 +61,7 @@ void door_lock_task(void *pvParameters)
             if(countdown_cnt)
             {
                 printf("%ds left...\n", countdown_cnt);
-                event_publish(HW_DOOR_LOCK,SERV_UI,(&(doorlock_event_t){DOOR_UNLOCKED,countdown_cnt}),sizeof(doorlock_event_t));
+                event_publish(HW_DOOR_LOCK,SERV_UI,(&(doorlock_event_t){DOOR_UNLOCKED,countdown_cnt}),doorlock_event_tt,sizeof(doorlock_event_t));
             }
 
             ////time running, green led flash
@@ -77,7 +78,7 @@ void door_lock_task(void *pvParameters)
                 printf("Locked!\n");
                 gpio_set_level(GPIO_LED_GREEN, 0);
                 gpio_set_level(GPIO_LED_RED, 1);
-                event_publish(HW_DOOR_LOCK,SERV_UI,(&(doorlock_event_t){DOOR_RELOCK,0}),sizeof(doorlock_event_t));
+                event_publish(HW_DOOR_LOCK,SERV_UI,(&(doorlock_event_t){DOOR_RELOCK,0}),doorlock_event_tt,sizeof(doorlock_event_t));
                 heart_beat_freq=portMAX_DELAY;
             }
         }
@@ -97,6 +98,22 @@ void app_main(void)
     //init i2c & oled
     i2c_master_init();
     oled_init();
+
+    //init flash
+    fdb_init();
+    char* str=fdb_kv_get(&kvdb, "fdb_avalible");//test fdb
+    if(str==NULL || *str=='0')
+    {
+        fdb_kv_set(&kvdb, "fdb_avalible", "1");
+        str=fdb_kv_get(&kvdb, "fdb_avalible");
+    }
+    ESP_LOGI("BOOT", "FlashDB OK?: %s(%s)",*str=='1'?"Yes":"No",str);
+    str=fdb_kv_get(&kvdb, "doorlock_pasw");//test fdb
+    //write defualt password if not exist
+    if(str==NULL)
+    {
+        fdb_kv_set(&kvdb, "doorlock_pasw", "0000");
+    }
     
     //init fingerprint reader
     fg_init();
@@ -115,7 +132,7 @@ void app_main(void)
     btn_init();
 
     app_init();
-
+    
     //run hardware func
     xTaskCreate(door_lock_task, "tsk_doorLock", 4096, NULL, 10, NULL);
     xTaskCreate(fg_service, "tsk_fg_reader_service", 4096, NULL, 10, NULL);

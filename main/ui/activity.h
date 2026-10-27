@@ -10,6 +10,7 @@ typedef struct activity_t
     enum view_type_e view_type;
     char view_name[24];
     void* view_structure;
+    char avtivity_cache[24];
 }activity_t;
 
 //activity stack

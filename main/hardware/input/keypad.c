@@ -41,7 +41,7 @@ void IRAM_ATTR keypad_input_handler(void *pvParameters)
                                 longpress_start_flag=true;
                             last_inpt_char=keypad_map[row][col];
                             ESP_LOGI("KP","Pressed:%c",last_inpt_char);
-                            event_publish(HW_INPT,SERV_UI,&(inpt_event_t){last_inpt_char},sizeof(inpt_event_t));
+                            event_publish(HW_INPT,SERV_UI,&(inpt_event_t){last_inpt_char},inpt_event_tt,sizeof(inpt_event_t));
                         }
                     }
             }

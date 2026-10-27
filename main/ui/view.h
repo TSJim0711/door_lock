@@ -19,7 +19,8 @@ enum action_type_e
 {
     ACTION_LAUNCH,
     ACTION_I_SET,
-    ACTION_PTR_SET
+    ACTION_PTR_SET,
+    ACTION_AUTH
 };
 typedef struct activity_t activity_t;
 typedef struct action_launch_t
@@ -36,6 +37,10 @@ typedef struct action_ptr_set_t
     void* act_targ_var;
     void* act_var_val;
 }action_ptr_set_t;
+typedef struct action_auth_t
+{
+    int auth_for;//enum->int
+}action_auth_t;
 
 //view body============
 //adapt every view struct, so, turn other view struct to widget_arr_only when stating widget.

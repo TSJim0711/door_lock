@@ -21,13 +21,13 @@ static void IRAM_ATTR btn_gpio_isr_handler(void* arg) //switch fingprint reader 
             last_btn_press=(uint32_t)arg;//btn press down,record it
 
         if((uint32_t)arg==GPIO_BTN_UP && !gpio_status_instant)
-            event_publish(HW_INPT,SERV_UI,&(inpt_event_t){INPT_BTN_UP},sizeof(inpt_event_t));
+            event_publish(HW_INPT,SERV_UI,&(inpt_event_t){INPT_BTN_UP},inpt_event_tt,sizeof(inpt_event_t));
         else if((uint32_t)arg==GPIO_BTN_DOWN && !gpio_status_instant)
-            event_publish(HW_INPT,SERV_UI,&(inpt_event_t){INPT_BTN_DOWN},sizeof(inpt_event_t));
+            event_publish(HW_INPT,SERV_UI,&(inpt_event_t){INPT_BTN_DOWN},inpt_event_tt,sizeof(inpt_event_t));
         else if((uint32_t)arg==GPIO_BTN_RETURN && !gpio_status_instant)
-            event_publish(HW_INPT,SERV_UI,&(inpt_event_t){INPT_BTN_RETURN},sizeof(inpt_event_t));
+            event_publish(HW_INPT,SERV_UI,&(inpt_event_t){INPT_BTN_RETURN},inpt_event_tt,sizeof(inpt_event_t));
         else if((uint32_t)arg==GPIO_BTN_ENTER && !gpio_status_instant)
-            event_publish(HW_INPT,SERV_UI,&(inpt_event_t){INPT_BTN_ENTER},sizeof(inpt_event_t));
+            event_publish(HW_INPT,SERV_UI,&(inpt_event_t){INPT_BTN_ENTER},inpt_event_tt,sizeof(inpt_event_t));
     }
     last_press_time=esp_timer_get_time();
 }
